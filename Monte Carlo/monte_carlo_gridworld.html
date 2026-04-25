@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monte Carlo 强化学习 - 黑洞棋盘模拟器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #eee;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #e94560;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .main-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr 400px;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .panel h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #e94560;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1em;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560, #c73e54);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(233, 69, 96, 0.4);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #0f3460, #1a4a7a);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(15, 52, 96, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #gridContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+        
+        #gridCanvas {
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        .chart-container {
+            height: 250px;
+            margin-top: 15px;
+        }
+        
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+        }
+        
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        
+        th, td {
+            padding: 8px 12px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        th {
+            background: rgba(233, 69, 96, 0.3);
+            color: #e94560;
+            position: sticky;
+            top: 0;
+        }
+        
+        tr:nth-child(even) {
+            background: rgba(255,255,255,0.02);
+        }
+        
+        tr:hover {
+            background: rgba(233, 69, 96, 0.1);
+        }
+        
+        .value-cell {
+            font-family: 'Courier New', monospace;
+        }
+        
+        .replay-controls {
+            margin-top: 15px;
+        }
+        
+        .replay-controls input {
+            width: 80px;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            text-align: center;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-label {
+            color: #aaa;
+            font-size: 0.9em;
+        }
+        
+        .status-value {
+            color: #e94560;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .bottom-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .test-panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        .test-pass {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            color: #4ade80;
+        }
+        
+        .test-fail {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #f87171;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+            font-size: 0.85em;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            transition: width 0.3s ease;
+        }
+        
+        #gridTooltip {
+            background: rgba(10, 10, 30, 0.95);
+            border: 1px solid #e94560;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.82em;
+            line-height: 1.6;
+            color: #eee;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            min-width: 160px;
+            white-space: nowrap;
+        }
+        #gridTooltip .tt-title {
+            color: #e94560;
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 1em;
+        }
+        #gridTooltip .tt-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        #gridTooltip .tt-label {
+            color: #aaa;
+        }
+        #gridTooltip .tt-value {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        #gridTooltip .tt-section {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+        
+        @media (max-width: 1400px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+            .bottom-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 Monte Carlo 强化学习 - 黑洞棋盘模拟器</h1>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">训练状态:</span>
+                <span class="status-value" id="trainingStatus">未开始</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">当前Episode:</span>
+                <span class="status-value" id="currentEpisode">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">最佳Return:</span>
+                <span class="status-value" id="bestReturn">-</span>
+            </div>
+        </div>
+        
+        <div class="main-layout">
+            <!-- 左侧：环境设置和训练设置 -->
+            <div class="left-panel">
+                <div class="panel">
+                    <h2>⚙️ 环境设置</h2>
+                    <div class="form-group">
+                        <label>棋盘大小</label>
+                        <input type="number" id="gridSize" value="10" min="5" max="20">
+                    </div>
+                    <div class="form-group">
+                        <label>黑洞格子占比 (%)</label>
+                        <input type="number" id="blackholeRatio" value="25" min="0" max="50">
+                    </div>
+                    <div class="form-group">
+                        <label>出发点 (x,y)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" id="startX" value="0" min="0" style="flex: 1;">
+                            <input type="number" id="startY" value="0" min="0" style="flex: 1;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>终点 (x,y)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" id="goalX" value="9" min="0" style="flex: 1;">
+                            <input type="number" id="goalY" value="9" min="0" style="flex: 1;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>黑洞点分值</label>
+                        <input type="number" id="cliffReward" value="-100">
+                    </div>
+                    <div class="form-group">
+                        <label>普通点分值</label>
+                        <input type="number" id="normalReward" value="-1">
+                    </div>
+                    <div class="form-group">
+                        <label>折扣因子 (γ)</label>
+                        <input type="number" id="gamma" value="1" step="0.1" min="0" max="1">
+                    </div>
+                </div>
+                
+                <div class="panel" style="margin-top: 20px;">
+                    <h2>🚀 训练设置</h2>
+                    <div class="form-group">
+                        <label>策略提升迭代轮次数量</label>
+                        <input type="number" id="maxIteration" value="100" min="10" max="3000">
+                    </div>
+                    <div class="form-group">
+                        <label>价值函数最大估计Episodes</label>
+                        <input type="number" id="maxEpisodes" value="20000" min="10" max="100000">
+                    </div>
+                    <div class="form-group">
+                        <label>价值函数收敛窗口</label>
+                        <input type="number" id="Threshold" value="1" min="0.001" max="10000" step="0.001">
+                    </div>
+                    <div class="form-group">
+                        <label>Episode 最大步数</label>
+                        <input type="number" id="maxStepsPerEpisode" value="20000" min="100" max="100000">
+                    </div>
+                    <button class="btn btn-primary" id="startTrainBtn" onclick="startTraining()">开始训练</button>
+                    <button class="btn btn-secondary" id="resetBtn" onclick="resetEnvironment()">重置环境</button>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 中间：可视化棋盘 -->
+            <div class="panel">
+                <h2>🎮 可视化棋盘</h2>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4ade80;"></div>
+                        <span>起点 S</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #fbbf24;"></div>
+                        <span>终点 G</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #1f2937;"></div>
+                        <span>黑洞 X</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #87ceeb;"></div>
+                        <span>路径</span>
+                    </div>
+                </div>
+                <div id="gridContainer" style="position: relative;">
+                    <canvas id="gridCanvas"></canvas>
+                    <div id="gridTooltip" style="display:none; position:absolute; pointer-events:none; z-index:10;"></div>
+                </div>
+                <div class="replay-controls">
+                    <label>回放第 <input type="number" id="replayEpisode" value="1" min="1"> 轮迭代策略轨迹</label>
+                    <span id="replayRangeHint" style="color:#aaa; font-size:0.85em; margin-left:6px;">（共 0 轮）</span>
+                    <button class="btn btn-secondary" onclick="doReplayEpisode()">回放</button>
+                </div>
+            </div>
+            
+            <!-- 右侧：训练日志和图表 -->
+            <div class="right-panel">
+                <div class="panel">
+                    <h2>📈 训练过程</h2>
+                    <div class="chart-container">
+                        <canvas id="trainingChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="panel" style="margin-top: 20px;">
+                    <h2>📝 训练日志</h2>
+                    <div class="log-container" id="logContainer">
+                        <div class="log-entry">等待训练开始...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 底部：价值表格和自测模块 -->
+        <div class="bottom-section">
+            <div class="panel">
+                <h2>📊 状态价值 | 动作价值 | 策略概率</h2>
+                <div class="table-container">
+                    <table id="valueTable">
+                        <thead>
+                            <tr>
+                                <th>状态</th>
+                                <th>V(s)</th>
+                                <th>Q(s,↑)</th>
+                                <th>Q(s,→)</th>
+                                <th>Q(s,↓)</th>
+                                <th>Q(s,←)</th>
+                                <th>π(↑)</th>
+                                <th>π(→)</th>
+                                <th>π(↓)</th>
+                                <th>π(←)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="valueTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="test-panel">
+                <h2>🧪 自测模块</h2>
+                <button class="btn btn-primary" onclick="runTests()">运行测试</button>
+                <button class="btn btn-secondary" onclick="runAccuracyTest()">计算准确性测试</button>
+                <div id="testResults"></div>
+            </div>
+        </div>
+
+        <!-- Gt 详情面板 -->
+        <div class="panel" style="margin-top: 20px;">
+            <h2>📋 Gt 详情（每轮策略评估的价值采样记录）</h2>
+            <div class="table-container" style="max-height: 500px;">
+                <table id="gtTable">
+                    <thead>
+                        <tr>
+                            <th>状态</th>
+                            <th>动作</th>
+                            <th>采样次数</th>
+                            <th>Gt 均值</th>
+                            <th>Gt 最小</th>
+                            <th>Gt 最大</th>
+                            <th>Q(s,a)</th>
+                            <th>Gt 序列</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gtTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 全局变量 ====================
+        let gridSize = 10;
+        let blackholes = new Set();
+        let startPos = {x: 0, y: 0};
+        let goalPos = {x: 9, y: 9};
+        let blackholeReward = -100;
+        let normalReward = -1;
+        let gamma = 1.0;
+        
+        // 价值函数和策略
+        let V = {}; // 状态价值函数
+        let Q = {}; // 动作价值函数
+        let MV = {}; // V(s) 访问计数（用于 incremental mean）
+        let MQ = {}; // Q(s,a) 访问计数（用于 incremental mean）
+        let policy = {}; // 策略概率
+        let returns = {}; // 累计回报
+        
+        // 训练数据
+        let episodes = [];
+        let episodeReturns = [];
+        let isTraining = false;
+        let trainingChart = null;
+        
+        // 每轮策略迭代后保存的 greedy 轨迹（按迭代轮次索引）
+        let policyTrajectories = [];
+        
+        // 当前策略提升迭代轮次（供 improvePolicy 中的 ε 衰减使用）
+        let currentIteration = 0;
+        
+        // 动作定义
+        const ACTIONS = [
+            {name: 'up', dx: 0, dy: -1, symbol: '↑'},
+            {name: 'right', dx: 1, dy: 0, symbol: '→'},
+            {name: 'down', dx: 0, dy: 1, symbol: '↓'},
+            {name: 'left', dx: -1, dy: 0, symbol: '←'}
+        ];
+        
+        // ==================== 初始化 ====================
+        function init() {
+            resetEnvironment();
+            initChart();
+            bindCanvasTooltip();
+        }
+        
+        function resetEnvironment() {
+            // 读取设置
+            gridSize = parseInt(document.getElementById('gridSize').value);
+            const blackholeRatio = parseInt(document.getElementById('blackholeRatio').value) / 100;
+            startPos = {
+                x: parseInt(document.getElementById('startX').value),
+                y: parseInt(document.getElementById('startY').value)
+            };
+            goalPos = {
+                x: parseInt(document.getElementById('goalX').value),
+                y: parseInt(document.getElementById('goalY').value)
+            };
+            blackholeReward = parseInt(document.getElementById('cliffReward').value);
+            normalReward = parseInt(document.getElementById('normalReward').value);
+            gamma = parseFloat(document.getElementById('gamma').value);
+            
+            // 验证起点终点
+            startPos.x = Math.min(startPos.x, gridSize - 1);
+            startPos.y = Math.min(startPos.y, gridSize - 1);
+            goalPos.x = Math.min(goalPos.x, gridSize - 1);
+            goalPos.y = Math.min(goalPos.y, gridSize - 1);
+            
+            // 生成黑洞
+            generateBlackholes(blackholeRatio);
+            
+            // 初始化价值函数和策略
+            initializeValues();
+            
+            // 清空训练数据
+            episodes = [];
+            episodeReturns = [];
+            policyTrajectories = [];
+            
+            // 更新UI
+            updateGridCanvas();
+            updateValueTable();
+            clearLogs();
+            updateChart();
+            
+            document.getElementById('trainingStatus').textContent = '未开始';
+            document.getElementById('currentEpisode').textContent = '0';
+            document.getElementById('bestReturn').textContent = '-';
+            document.getElementById('progressBar').style.width = '0%';
+            
+            log('环境已重置');
+        }
+        
+        function generateBlackholes(ratio) {
+            blackholes.clear();
+            const totalCells = gridSize * gridSize;
+            const blackholeCount = Math.floor(totalCells * ratio);
+            
+            const availableCells = [];
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    if (!(x === startPos.x && y === startPos.y) && 
+                        !(x === goalPos.x && y === goalPos.y)) {
+                        availableCells.push({x, y});
+                    }
+                }
+            }
+            
+            // 随机选择黑洞位置
+            for (let i = 0; i < blackholeCount && availableCells.length > 0; i++) {
+                const idx = Math.floor(Math.random() * availableCells.length);
+                const cell = availableCells.splice(idx, 1)[0];
+                blackholes.add(`${cell.x},${cell.y}`);
+            }
+        }
+        
+        function initializeValues() {
+            V = {};
+            Q = {};
+            MV = {};
+            MQ = {};
+            policy = {};
+            returns = {};
+            
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    V[state] = -9999;
+                    Q[state] = {};
+                    MV[state] = 0;
+                    MQ[state] = {};
+                    policy[state] = {};
+                    returns[state] = {};
+                    
+                    // 初始化策略概率：边界处撞墙动作概率为 0，其余均分
+                    const legalActionsInit = ACTIONS.filter(a => {
+                        const nx = x + a.dx;
+                        const ny = y + a.dy;
+                        return nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize;
+                    });
+                    const initProb = 1.0 / legalActionsInit.length;
+                    for (let action of ACTIONS) {
+                        Q[state][action.name] = -9999;
+                        MQ[state][action.name] = 0;
+                        const nx = x + action.dx;
+                        const ny = y + action.dy;
+                        policy[state][action.name] = (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize)
+                            ? initProb : 0;
+                        returns[state][action.name] = [];
+                    }
+                }
+            }
+        }
+        function resetValues() {
+
+            MV = {};
+            MQ = {};
+
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    MV[state] = 0;
+                    MQ[state] = {};                    
+                    for (let action of ACTIONS) {
+                        MQ[state][action.name] = 0;
+                    }
+                }
+            }
+        }
+        // ==================== 棋盘渲染 ====================
+        function updateGridCanvas(highlightPath = null) {
+            const canvas = document.getElementById('gridCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const cellSize = 40;
+            const padding = 20;
+            canvas.width = gridSize * cellSize + 2 * padding;
+            canvas.height = gridSize * cellSize + 2 * padding;
+            
+            // 清空画布
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制网格
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const cellX = padding + x * cellSize;
+                    const cellY = padding + y * cellSize;
+                    const state = `${x},${y}`;
+                    
+                    // 绘制路径高亮
+                    if (highlightPath && highlightPath.some(p => p.x === x && p.y === y)) {
+                        ctx.fillStyle = '#87ceeb';
+                        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+                    }
+                    
+                    // 绘制格子
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+                    
+                    // 特殊格子
+                    if (x === startPos.x && y === startPos.y) {
+                        ctx.fillStyle = '#4ade80';
+                        ctx.fillRect(cellX + 2, cellY + 2, cellSize - 4, cellSize - 4);
+                        ctx.fillStyle = '#000';
+                        ctx.font = 'bold 16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('S', cellX + cellSize/2, cellY + cellSize/2);
+                    } else if (x === goalPos.x && y === goalPos.y) {
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.fillRect(cellX + 2, cellY + 2, cellSize - 4, cellSize - 4);
+                        ctx.fillStyle = '#000';
+                        ctx.font = 'bold 16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('G', cellX + cellSize/2, cellY + cellSize/2);
+                    } else if (blackholes.has(state)) {
+                        ctx.fillStyle = '#1f2937';
+                        ctx.fillRect(cellX + 2, cellY + 2, cellSize - 4, cellSize - 4);
+                        ctx.fillStyle = '#666';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('X', cellX + cellSize/2, cellY + cellSize/2);
+                    } else {
+                        // 显示状态价值
+                        const value = computeVFromQ(state);
+                        if (value !== 0) {
+                            ctx.fillStyle = getValueColor(value);
+                            ctx.fillRect(cellX + 2, cellY + 2, cellSize - 4, cellSize - 4);
+                        }
+                        
+                        // 显示数值
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        const displayValue = value.toFixed(1);
+                        ctx.fillText(displayValue, cellX + cellSize/2, cellY + cellSize/2);
+                    }
+                }
+            }
+            
+            // 绘制路径线条
+            if (highlightPath && highlightPath.length > 1) {
+                ctx.strokeStyle = '#87ceeb';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                for (let i = 0; i < highlightPath.length - 1; i++) {
+                    const p1 = highlightPath[i];
+                    const p2 = highlightPath[i + 1];
+                    const x1 = padding + p1.x * cellSize + cellSize / 2;
+                    const y1 = padding + p1.y * cellSize + cellSize / 2;
+                    const x2 = padding + p2.x * cellSize + cellSize / 2;
+                    const y2 = padding + p2.y * cellSize + cellSize / 2;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x1, y1);
+                    }
+                    ctx.lineTo(x2, y2);
+                }
+                ctx.stroke();
+            }
+            
+            // 绘制坐标轴
+            ctx.fillStyle = '#aaa';
+            ctx.font = '12px Arial';
+            for (let i = 0; i < gridSize; i++) {
+                ctx.textAlign = 'center';
+                ctx.fillText(i.toString(), padding + i * cellSize + cellSize/2, padding - 5);
+                ctx.textAlign = 'right';
+                ctx.fillText(i.toString(), padding - 5, padding + i * cellSize + cellSize/2 + 4);
+            }
+        }
+        
+        function getValueColor(value) {
+            // 根据价值返回颜色
+            if (value > 0) {
+                const intensity = Math.min(value / 50, 1);
+                return `rgba(74, 222, 128, ${intensity * 0.5})`;
+            } else {
+                const intensity = Math.min(Math.abs(value) / 100, 1);
+                return `rgba(248, 113, 113, ${intensity * 0.5})`;
+            }
+        }
+        
+        // ==================== 棋盘鼠标悬停 Tooltip ====================
+        const GRID_CELL_SIZE = 40;
+        const GRID_PADDING = 20;
+        
+        function bindCanvasTooltip() {
+            const canvas = document.getElementById('gridCanvas');
+            const tooltip = document.getElementById('gridTooltip');
+            
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                
+                const gx = Math.floor((mx - GRID_PADDING) / GRID_CELL_SIZE);
+                const gy = Math.floor((my - GRID_PADDING) / GRID_CELL_SIZE);
+                
+                if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize) {
+                    tooltip.style.display = 'none';
+                    return;
+                }
+                
+                showGridTooltip(gx, gy, e, rect);
+            });
+            
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        }
+        
+        function showGridTooltip(gx, gy, mouseEvent, canvasRect) {
+            const tooltip = document.getElementById('gridTooltip');
+            const state = `${gx},${gy}`;
+            
+            // 格子类型标签
+            let typeLabel = '';
+            if (gx === startPos.x && gy === startPos.y) typeLabel = ' (起点 S)';
+            else if (gx === goalPos.x && gy === goalPos.y) typeLabel = ' (终点 G)';
+            else if (blackholes.has(state)) typeLabel = ' (黑洞 X)';
+            
+            // 构建 tooltip 内容
+            let html = `<div class="tt-title">(${gx},${gy})${typeLabel}</div>`;
+            
+            // V(s)
+            html += `<div class="tt-row"><span class="tt-label">V(s)</span><span class="tt-value">${computeVFromQ(state).toFixed(2)}</span></div>`;
+            
+            // Q(s,a)
+            html += `<div class="tt-section">`;
+            for (let action of ACTIONS) {
+                html += `<div class="tt-row"><span class="tt-label">Q(${action.symbol})</span><span class="tt-value">${Q[state][action.name].toFixed(2)}</span></div>`;
+            }
+            html += `</div>`;
+            
+            // π(a|s)
+            html += `<div class="tt-section">`;
+            for (let action of ACTIONS) {
+                const prob = policy[state][action.name];
+                html += `<div class="tt-row"><span class="tt-label">π(${action.symbol})</span><span class="tt-value">${prob.toFixed(3)}</span></div>`;
+            }
+            html += `</div>`;
+            
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            
+            // 定位：跟随鼠标，避免超出容器
+            const container = document.getElementById('gridContainer');
+            const containerRect = container.getBoundingClientRect();
+            let left = mouseEvent.clientX - containerRect.left + 14;
+            let top = mouseEvent.clientY - containerRect.top + 14;
+            
+            // 右侧溢出则翻到左边
+            if (left + 180 > containerRect.width) {
+                left = mouseEvent.clientX - containerRect.left - 190;
+            }
+            // 下方溢出则上移
+            if (top + 220 > containerRect.height) {
+                top = mouseEvent.clientY - containerRect.top - 230;
+            }
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+        }
+        
+        // ==================== Monte Carlo 策略迭代算法 ====================
+        async function startTraining() {
+            if (isTraining) return;
+            
+            isTraining = true;
+            document.getElementById('startTrainBtn').disabled = true;
+            document.getElementById('trainingStatus').textContent = '训练中...';
+            
+            const maxIterations = parseInt(document.getElementById('maxIteration').value);
+            episodes = [];
+            episodeReturns = [];
+            
+            let totalEpisodes = 0;
+            let bestReturn = -Infinity;
+            let iteration = 0;
+            let stableCount = 0; // 连续策略不变的次数
+            
+            while (iteration < maxIterations && isTraining) {
+                iteration++;
+                currentIteration = iteration;
+                log(`=== 策略评估迭代 ${iteration} ===`);
+                
+                // 策略评估：在当前策略下运行多轮Episode直到V收敛
+                const evalResult = await evaluatePolicy();
+                totalEpisodes += evalResult.episodeCount;
+                
+                // 计算当前策略的Return
+                const policyReturn = calculatePolicyReturnFromStart();
+                episodeReturns.push(policyReturn);
+                episodes.push(...evalResult.episodes);
+                
+                // 用当前 greedy 策略从起点生成轨迹并保存，供回放直接使用
+                policyTrajectories.push(generateGreedyTrajectory());
+                // 更新回放范围提示，并将 input max/value 设为当前最大轮次
+                const hint = document.getElementById('replayRangeHint');
+                const repInput = document.getElementById('replayEpisode');
+                if (hint) hint.textContent = `（共 ${policyTrajectories.length} 轮）`;
+                if (repInput) {
+                    repInput.max = policyTrajectories.length;
+                    repInput.value = policyTrajectories.length;
+                }
+                
+                if (policyReturn > bestReturn) {
+                    bestReturn = policyReturn;
+                    document.getElementById('bestReturn').textContent = policyReturn.toFixed(2);
+                }
+                
+                // 更新UI
+                document.getElementById('currentEpisode').textContent = totalEpisodes.toString();
+                document.getElementById('progressBar').style.width = 
+                    (iteration / maxIterations * 100) + '%';
+                
+                log(`策略评估完成: ${evalResult.episodeCount} 个Episode, V收敛: ${evalResult.converged}, Return: ${policyReturn.toFixed(2)}`);
+                updateChart();
+                updateValueTable();
+                updateGridCanvas();
+                
+                // 策略提升
+                const policyChanged = improvePolicy();
+                if (!policyChanged) {
+                    stableCount++;
+                    if (stableCount >= 2) {
+                        log('策略已连续两轮稳定，停止训练');
+                        break;
+                    }
+                    log('策略未变化，继续评估...');
+                } else {
+                    stableCount = 0;
+                    log('策略已更新');
+                }
+                
+                // 让UI有机会更新
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            
+            isTraining = false;
+            document.getElementById('startTrainBtn').disabled = false;
+            document.getElementById('trainingStatus').textContent = '训练完成';
+            
+            // 最终更新
+            updateGridCanvas();
+            updateValueTable();
+            log(`训练完成！共 ${iteration} 轮策略迭代, ${totalEpisodes} 个Episode`);
+        }
+        
+        // 策略评估：在当前策略下运行Episode直到动作价值函数收敛
+        async function evaluatePolicy() {
+            const maxEvalEpisodes = parseInt(document.getElementById('maxEpisodes').value);
+            const convergenceThreshold = parseFloat(document.getElementById('Threshold').value);
+            const evalEpisodes = [];
+            let episodeCount = 0;
+            let converged = false;
+            
+            // 每轮策略评估前重置访问计数 MQ，保留 Q 值作为初始估计
+            // 新策略下重新采样，步长从 1/MQ=1 开始，Q 会从旧值快速向新策略真值收敛
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    MV[state] = 0;
+                    for (let action of ACTIONS) {
+                        MQ[state][action.name] = 0;
+                    }
+                }
+            }
+
+            // 重置 Gt 日志数据
+            gtStateLog = {};
+
+            // 收集所有非终止状态作为起点列表，轮询出发确保每个状态都被充分采样
+            const startStates = [];
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    if (!blackholes.has(state) && !(x === goalPos.x && y === goalPos.y)) {
+                        startStates.push({x, y});
+                    }
+                }
+            }
+
+            // 保存检查点的 Q 值用于收敛比较（初始化为当前 Q）
+            let prevQ = {};
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    prevQ[state] = {};
+                    for (let action of ACTIONS) {
+                        prevQ[state][action.name] = Q[state][action.name];
+                    }
+                }
+            }
+
+            const checkInterval = startStates.length;
+            // 连续收敛计数：连续 N 轮检查 maxDiff < threshold 才算真正收敛
+            let consecutiveConvergeCount = 0;
+            const requiredConsecutiveChecks = 3;
+
+            for (let ep = 0; ep < maxEvalEpisodes; ep++) {
+                // 轮询选择起点，确保所有状态都被覆盖
+                const startIdx = ep % startStates.length;
+                const {x: startX, y: startY} = startStates[startIdx];
+                
+                // 每 10 轮迭代中，第 10 轮允许走重复路径（探索），其余不允许
+                const allowRevisit = (currentIteration % 10 === 0);
+                
+                // 生成Episode
+                const episode = generateEpisode(startX, startY, allowRevisit);
+                evalEpisodes.push(episode);
+                episodeCount++;
+                
+                // 更新价值函数
+                updateValuesIncremental(episode);
+                
+                // 每遍历完一轮所有状态后检查收敛
+                if ((ep + 1) % checkInterval === 0) {
+                    let maxDiff = 0;
+                    for (let x = 0; x < gridSize; x++) {
+                        for (let y = 0; y < gridSize; y++) {
+                            const state = `${x},${y}`;
+                            if (blackholes.has(state) || (x === goalPos.x && y === goalPos.y)) continue;
+                            for (let action of ACTIONS) {
+                                const diff = Math.abs(Q[state][action.name] - prevQ[state][action.name]);
+                                if (diff > maxDiff) maxDiff = diff;
+                            }
+                        }
+                    }
+                    
+                    if (maxDiff < convergenceThreshold) {
+                        consecutiveConvergeCount++;
+                        if (consecutiveConvergeCount >= requiredConsecutiveChecks) {
+                            converged = true;
+                            break;
+                        }
+                    } else {
+                        consecutiveConvergeCount = 0;
+                    }
+                    
+                    // 更新检查点
+                    for (let x = 0; x < gridSize; x++) {
+                        for (let y = 0; y < gridSize; y++) {
+                            const state = `${x},${y}`;
+                            for (let action of ACTIONS) {
+                                prevQ[state][action.name] = Q[state][action.name];
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 输出本轮每个状态的 Gt 记录
+            //logGtData();
+            
+            return { episodeCount, converged, episodes: evalEpisodes };
+        }
+        
+        // 策略提升：基于当前Q值更新策略，返回是否有状态的最优动作发生了变化
+        function improvePolicy() {
+            let policyChanged = false;
+            
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    
+                    // 跳过终止状态
+                    if (blackholes.has(state) || (x === goalPos.x && y === goalPos.y)) continue;
+                    
+                    // 判断每个动作是否合法（不撞墙）
+                    const legalActions = [];
+                    for (let action of ACTIONS) {
+                        const nx = x + action.dx;
+                        const ny = y + action.dy;
+                        if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+                            legalActions.push(action.name);
+                        }
+                    }
+                    
+                    // 在合法动作中找到 Q 值最大的
+                    let maxQ = -Infinity;
+                    let bestActions = [];
+                    
+                    for (let actionName of legalActions) {
+                        const q = Q[state][actionName];
+                        if (q > maxQ) {
+                            maxQ = q;
+                            bestActions = [actionName];
+                        } else if (q === maxQ) {
+                            bestActions.push(actionName);
+                        }
+                    }
+                    
+                    // ε-贪婪策略：ε 随迭代轮次衰减，前期多探索，后期多利用
+                    const epsilon = Math.max(0.05, 0.5 / (1 + 0.1 * currentIteration));
+                    const prob = (1 - epsilon) / bestActions.length;
+                    
+                    // 检查策略是否发生变化，并更新
+                    for (let action of ACTIONS) {
+                        const oldProb = policy[state][action.name];
+                        let newProb;
+                        
+                        if (!legalActions.includes(action.name)) {
+                            // 撞墙动作：概率固定为 0
+                            newProb = 0;
+                        } else if (bestActions.includes(action.name)) {
+                            newProb = prob + epsilon / legalActions.length;
+                        } else {
+                            newProb = epsilon / legalActions.length;
+                        }
+                        
+                        if (Math.abs(oldProb - newProb) > 1e-6) {
+                            policyChanged = true;
+                        }
+                        policy[state][action.name] = newProb;
+                    }
+                }
+            }
+            
+            return policyChanged;
+        }
+        
+        function generateEpisode(startX, startY, allowRevisit = false) {
+            const episode = [];
+            let x = startX;
+            let y = startY;
+            const maxSteps = parseInt(document.getElementById('maxStepsPerEpisode').value) || 20000;
+            const visited = allowRevisit ? null : new Set();
+            
+            for (let step = 0; step < maxSteps; step++) {
+                const state = `${x},${y}`;
+                if (visited) visited.add(state);
+                
+                // 根据是否允许重复选择动作
+                const action = visited
+                    ? selectActionAvoidVisited(state, x, y, visited)
+                    : selectAction(state);
+                
+                // 执行动作
+                let newX = x + action.dx;
+                let newY = y + action.dy;
+                
+                // 检测是否撞墙（往边界外移动）
+                const hitWall = (newX < 0 || newX >= gridSize || newY < 0 || newY >= gridSize);
+                
+                // 边界检查（clamp 到合法范围）
+                newX = Math.max(0, Math.min(gridSize - 1, newX));
+                newY = Math.max(0, Math.min(gridSize - 1, newY));
+                
+                const newState = `${newX},${newY}`;
+                
+                if (!allowRevisit) {
+                    // 不允许重复：撞墙终止
+                    if (hitWall) {
+                        episode.push({
+                            state: state,
+                            action: action.name,
+                            reward: normalReward,
+                            x: x,
+                            y: y
+                        });
+                        break;
+                    }
+                    // 不允许重复：下一步已走过则终止
+                    if (visited.has(newState)) {
+                        break;
+                    }
+                    
+                    // 获取奖励
+                    let reward;
+                    if (blackholes.has(newState)) {
+                        reward = blackholeReward;
+                    } else if (newX === goalPos.x && newY === goalPos.y) {
+                        reward = 0;
+                    } else {
+                        reward = normalReward;
+                    }
+                    
+                    episode.push({
+                        state: state,
+                        action: action.name,
+                        reward: reward,
+                        x: x,
+                        y: y
+                    });
+                    
+                    // 终止条件
+                    if (blackholes.has(newState) || (newX === goalPos.x && newY === goalPos.y)) {
+                        break;
+                    }
+                } else {
+                    // 允许重复：撞墙留在原地继续
+                    let reward;
+                    if (hitWall) {
+                        reward = normalReward;
+                    } else if (blackholes.has(newState)) {
+                        reward = blackholeReward;
+                    } else if (newX === goalPos.x && newY === goalPos.y) {
+                        reward = 0;
+                    } else {
+                        reward = normalReward;
+                    }
+                    
+                    episode.push({
+                        state: state,
+                        action: action.name,
+                        reward: reward,
+                        x: x,
+                        y: y
+                    });
+                    
+                    // 终止条件
+                    if (blackholes.has(newState) || (newX === goalPos.x && newY === goalPos.y)) {
+                        break;
+                    }
+                }
+                
+                x = newX;
+                y = newY;
+            }
+            return episode;
+        }
+        
+        // 选择动作时排除已访问的格子（不走回头路）
+        function selectActionAvoidVisited(state, curX, curY, visited) {
+            const probs = policy[state];
+            
+            // 筛选未访问过的可行动作
+            let feasibleActions = [];
+            let feasibleProbs = [];
+            let feasibleSum = 0;
+
+            for (let action of ACTIONS) {
+                let nx = curX + action.dx;
+                let ny = curY + action.dy;
+                
+                // 撞墙动作跳过（策略中概率已为0，作为安全兜底）
+                if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) continue;
+                
+                const nextState = `${nx},${ny}`;
+                
+                // 排除已访问的格子（回头路）
+                if (!visited.has(nextState)) {
+                    feasibleActions.push(action);
+                    const p = probs[action.name];
+                    feasibleProbs.push(p);
+                    feasibleSum += p;
+                }
+            }
+            
+            // 如果所有方向都走过（死胡同），回退到全方向选择
+            if (feasibleActions.length === 0) {
+                return selectAction(state);
+            }
+            
+            // 按剩余方向的概率比例采样
+            const rand = Math.random() * feasibleSum;
+            let cumProb = 0;
+            for (let i = 0; i < feasibleActions.length; i++) {
+                cumProb += feasibleProbs[i];
+                if (rand < cumProb) {
+                    return feasibleActions[i];
+                }
+            }
+            
+            return feasibleActions[feasibleActions.length - 1];
+        }
+        
+        function selectAction(state) {
+            const probs = policy[state];
+            const rand = Math.random();
+            let cumProb = 0;
+            
+            for (let action of ACTIONS) {
+                cumProb += probs[action.name];
+                if (rand < cumProb) {
+                    return action;
+                }
+            }
+            
+            return ACTIONS[ACTIONS.length - 1];
+        }
+        
+        function calculateReturn(episode) {
+            let G = 0;
+            for (let t = episode.length - 1; t >= 0; t--) {
+                G = episode[t].reward + gamma * G;
+            }
+            return G;
+        }
+        
+        // 计算从初始点(0,0)按照当前策略走到终点或黑洞的Return
+        function calculatePolicyReturnFromStart() {
+            return calculateReturnFromStartPath();
+        }
+        
+        // 从起点按照当前策略生成路径并计算Return
+        function calculateReturnFromStartPath() {
+            const path = [];
+            let x = startPos.x;
+            let y = startPos.y;
+            const visited = new Set();
+            const maxSteps = gridSize * gridSize * 2; // 防止策略环路
+            for (let step = 0; step < maxSteps; step++) {
+                const state = `${x},${y}`;
+                
+                // 防止循环
+               // if (visited.has(state)) break;
+               // visited.add(state);
+                
+                // 根据当前策略选择最优动作
+                let maxProb = -1;
+                let bestAction = ACTIONS[0];
+                
+                for (let action of ACTIONS) {
+                    if (policy[state][action.name] > maxProb) {
+                        maxProb = policy[state][action.name];
+                        bestAction = action;
+                    }
+                }
+                
+                // 执行动作
+                let newX = x + bestAction.dx;
+                let newY = y + bestAction.dy;
+                
+                // 检测是否撞墙
+                const hitWall = (newX < 0 || newX >= gridSize || newY < 0 || newY >= gridSize);
+                
+                // 边界检查
+                newX = Math.max(0, Math.min(gridSize - 1, newX));
+                newY = Math.max(0, Math.min(gridSize - 1, newY));
+                
+                const newState = `${newX},${newY}`;
+                
+                // 获取奖励
+                let reward;
+                if (hitWall) {
+                    // 撞墙：给予惩罚并终止
+                    reward = normalReward;
+                    path.push({reward});
+                    break;
+                } else if (blackholes.has(newState)) {
+                    reward = blackholeReward;
+                } else if (newX === goalPos.x && newY === goalPos.y) {
+                    reward = 0;
+                } else {
+                    reward = normalReward;
+                }
+                
+                path.push({reward});
+                
+                // 检查终止条件
+                if (blackholes.has(newState) || (newX === goalPos.x && newY === goalPos.y)) {
+                    break;
+                }
+                
+                x = newX;
+                y = newY;
+            }
+            
+            // 计算Return
+            let G = 0;
+            for (let t = path.length - 1; t >= 0; t--) {
+                G = path[t].reward + gamma * G;
+            }
+            return G;
+        }
+        
+        // 全局存储：每次策略评估中每个状态-动作对的 Gt 记录
+        let gtLogData = {};   // { "x,y|action": [Gt1, Gt2, ...] }
+        let gtStateLog = {};  // { "x,y": { "action1": [Gt1, Gt2, ...], ... } }
+
+        function updateValuesIncremental(episode) {
+            // First-Visit MC：对 Episode 中每个首次访问的状态-动作对进行 incremental mean 更新
+            // V(s) 不再独立估计，而是从 Q(s,a) 和 π(a|s) 直接推导：V(s) = Σ π(a|s)·Q(s,a)
+            const visitedSA = new Set();
+
+            for (let t = 0; t < episode.length; t++) {
+                const { state, action } = episode[t];
+
+                // 从 t 步开始向后计算 Gt
+                let Gt = 0;
+                for (let k = episode.length - 1; k >= t; k--) {
+                    Gt = episode[k].reward + gamma * Gt;
+                }
+
+                // --- 动作价值 Q(s,a)：First-Visit ---
+                const sa = `${state}|${action}`;
+                if (!visitedSA.has(sa)) {
+                    visitedSA.add(sa);
+                    MQ[state][action]++;
+                    Q[state][action] = Q[state][action] + (1 / MQ[state][action]) * (Gt - Q[state][action]);
+
+                    // 记录 Gt 到日志数据
+                    if (!gtStateLog[state]) gtStateLog[state] = {};
+                    if (!gtStateLog[state][action]) gtStateLog[state][action] = [];
+                    gtStateLog[state][action].push(Gt);
+                }
+            }
+        }
+        
+        // V(s) = Σ_a π(a|s) · Q(s,a)，从 Q 和策略实时计算
+        function computeVFromQ(state) {
+            let v = 0;
+            for (let action of ACTIONS) {
+                v += policy[state][action.name] * Q[state][action.name];
+            }
+            return v;
+        }
+        
+        // 输出本轮策略评估中每个状态的 Gt 记录
+        function logGtData() {
+            // 按 x,y 排序输出
+            const states = Object.keys(gtStateLog).sort((a, b) => {
+                const [ax, ay] = a.split(',').map(Number);
+                const [bx, by] = b.split(',').map(Number);
+                return ax !== bx ? ax - bx : ay - by;
+            });
+
+            for (const state of states) {
+                const actionLog = gtStateLog[state];
+                const actionNames = Object.keys(actionLog);
+                if (actionNames.length === 0) continue;
+
+                // 简化输出：每个状态输出一行，包含所有动作的 Gt 序列
+                let parts = [];
+                for (const aName of actionNames) {
+                    const gts = actionLog[aName];
+                    const sym = ACTIONS.find(a => a.name === aName)?.symbol || aName;
+                    // 只显示前 10 个和最后 5 个 Gt，避免日志过长
+                    let gtStr;
+                    if (gts.length <= 15) {
+                        gtStr = gts.map(g => g.toFixed(1)).join(', ');
+                    } else {
+                        const head = gts.slice(0, 10).map(g => g.toFixed(1)).join(', ');
+                        const tail = gts.slice(-5).map(g => g.toFixed(1)).join(', ');
+                        gtStr = `${head}, ..., ${tail}`;
+                    }
+                    parts.push(`π(${sym})Gt[${gts.length}]: [${gtStr}]`);
+                }
+                log(`  状态(${state}): ${parts.join(' | ')}`);
+            }
+
+            // 同时更新 Gt 详情面板
+            updateGtTable();
+        }
+        
+        // 更新 Gt 详情表格
+        function updateGtTable() {
+            const tbody = document.getElementById('gtTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const states = Object.keys(gtStateLog).sort((a, b) => {
+                const [ax, ay] = a.split(',').map(Number);
+                const [bx, by] = b.split(',').map(Number);
+                return ax !== bx ? ax - bx : ay - by;
+            });
+
+            for (const state of states) {
+                const actionLog = gtStateLog[state];
+                for (const aName of Object.keys(actionLog)) {
+                    const gts = actionLog[aName];
+                    const sym = ACTIONS.find(a => a.name === aName)?.symbol || aName;
+                    const row = document.createElement('tr');
+
+                    // 状态
+                    const stateCell = document.createElement('td');
+                    stateCell.textContent = `(${state})`;
+                    row.appendChild(stateCell);
+
+                    // 动作
+                    const actionCell = document.createElement('td');
+                    actionCell.textContent = sym;
+                    row.appendChild(actionCell);
+
+                    // 采样次数
+                    const countCell = document.createElement('td');
+                    countCell.textContent = gts.length;
+                    row.appendChild(countCell);
+
+                    // Gt 均值
+                    const meanCell = document.createElement('td');
+                    const mean = gts.reduce((s, v) => s + v, 0) / gts.length;
+                    meanCell.textContent = mean.toFixed(2);
+                    meanCell.className = 'value-cell';
+                    row.appendChild(meanCell);
+
+                    // Gt 最小值
+                    const minCell = document.createElement('td');
+                    minCell.textContent = Math.min(...gts).toFixed(2);
+                    minCell.className = 'value-cell';
+                    row.appendChild(minCell);
+
+                    // Gt 最大值
+                    const maxCell = document.createElement('td');
+                    maxCell.textContent = Math.max(...gts).toFixed(2);
+                    maxCell.className = 'value-cell';
+                    row.appendChild(maxCell);
+
+                    // 当前 Q(s,a)
+                    const qCell = document.createElement('td');
+                    qCell.textContent = Q[state][aName].toFixed(2);
+                    qCell.className = 'value-cell';
+                    row.appendChild(qCell);
+
+                    // Gt 序列（折叠显示）
+                    const seqCell = document.createElement('td');
+                    seqCell.className = 'value-cell';
+                    seqCell.style.maxWidth = '300px';
+                    seqCell.style.overflow = 'hidden';
+                    seqCell.style.textOverflow = 'ellipsis';
+                    seqCell.style.whiteSpace = 'nowrap';
+                    if (gts.length <= 20) {
+                        seqCell.textContent = gts.map(g => g.toFixed(1)).join(', ');
+                    } else {
+                        const head = gts.slice(0, 10).map(g => g.toFixed(1)).join(', ');
+                        const tail = gts.slice(-5).map(g => g.toFixed(1)).join(', ');
+                        seqCell.textContent = `${head}, ..., ${tail}`;
+                    }
+                    seqCell.title = gts.map(g => g.toFixed(2)).join(', '); // 悬停查看全部
+                    row.appendChild(seqCell);
+
+                    tbody.appendChild(row);
+                }
+            }
+        }
+        
+        function updatePolicy(episode) {
+            // 贪婪策略更新
+            const visitedStates = new Set();
+            
+            for (let {state} of episode) {
+                if (visitedStates.has(state)) continue;
+                visitedStates.add(state);
+                
+                // 解析坐标，判断合法动作
+                const [sx, sy] = state.split(',').map(Number);
+                const legalActions = [];
+                for (let action of ACTIONS) {
+                    const nx = sx + action.dx;
+                    const ny = sy + action.dy;
+                    if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+                        legalActions.push(action.name);
+                    }
+                }
+                
+                // 在合法动作中找到最优动作
+                let maxQ = -Infinity;
+                let bestActions = [];
+                
+                for (let actionName of legalActions) {
+                    const q = Q[state][actionName];
+                    if (q > maxQ) {
+                        maxQ = q;
+                        bestActions = [actionName];
+                    } else if (q === maxQ) {
+                        bestActions.push(actionName);
+                    }
+                }
+                
+                // ε-贪婪：只在合法动作之间分配概率
+                const epsilon = 0.1;
+                const prob = (1 - epsilon) / bestActions.length;
+                
+                for (let action of ACTIONS) {
+                    if (!legalActions.includes(action.name)) {
+                        policy[state][action.name] = 0;
+                    } else if (bestActions.includes(action.name)) {
+                        policy[state][action.name] = prob + epsilon / legalActions.length;
+                    } else {
+                        policy[state][action.name] = epsilon / legalActions.length;
+                    }
+                }
+            }
+        }
+        
+        // ==================== 回放功能 ====================
+        
+        // 用当前策略以 greedy 方式从起点生成一条确定性轨迹（不带随机性）
+        function generateGreedyTrajectory() {
+            const path = [];
+            let x = startPos.x;
+            let y = startPos.y;
+            const visited = new Set();
+            const maxSteps = gridSize * gridSize * 2;
+            
+            for (let step = 0; step < maxSteps; step++) {
+                path.push({x, y});
+                const state = `${x},${y}`;
+                
+                // 防止策略环路
+                if (visited.has(state)) break;
+                visited.add(state);
+                
+                // Greedy：选概率最高的动作
+                let maxProb = -1;
+                let bestAction = ACTIONS[0];
+                for (let action of ACTIONS) {
+                    if (policy[state][action.name] > maxProb) {
+                        maxProb = policy[state][action.name];
+                        bestAction = action;
+                    }
+                }
+                
+                let newX = x + bestAction.dx;
+                let newY = y + bestAction.dy;
+                newX = Math.max(0, Math.min(gridSize - 1, newX));
+                newY = Math.max(0, Math.min(gridSize - 1, newY));
+                
+                const newState = `${newX},${newY}`;
+                if (blackholes.has(newState) || (newX === goalPos.x && newY === goalPos.y)) {
+                    path.push({x: newX, y: newY});
+                    break;
+                }
+                
+                x = newX;
+                y = newY;
+            }
+            
+            return path;
+        }
+        
+        function doReplayEpisode() {
+            if (policyTrajectories.length === 0) {
+                alert('尚未开始训练，没有可回放的轨迹');
+                return;
+            }
+            
+            const iterIdx = parseInt(document.getElementById('replayEpisode').value);
+            if (isNaN(iterIdx) || iterIdx < 1 || iterIdx > policyTrajectories.length) {
+                alert(`请输入 1 ~ ${policyTrajectories.length} 之间的迭代轮次编号`);
+                return;
+            }
+            
+            // 直接读取已保存的轨迹（第 iterIdx 轮，数组从 0 开始）
+            const path = policyTrajectories[iterIdx - 1];
+            updateGridCanvas(path);
+            log(`回放第 ${iterIdx} 轮迭代的 greedy 策略轨迹，路径长度: ${path.length}`);
+        }
+        
+        // ==================== 图表 ====================
+        function initChart() {
+            const ctx = document.getElementById('trainingChart').getContext('2d');
+            trainingChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Return',
+                        data: [],
+                        borderColor: '#e94560',
+                        backgroundColor: 'rgba(233, 69, 96, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#fff' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#aaa' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Iteration',
+                                color: '#aaa'
+                            }
+                        },
+                        y: {
+                            ticks: { color: '#aaa' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Return',
+                                color: '#aaa'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateChart() {
+            if (!trainingChart) return;
+            
+            const labels = episodeReturns.map((_, i) => i + 1);
+            trainingChart.data.labels = labels;
+            trainingChart.data.datasets[0].data = episodeReturns;
+            trainingChart.update('none');
+        }
+        
+        // ==================== 表格 ====================
+        function updateValueTable() {
+            const tbody = document.getElementById('valueTableBody');
+            tbody.innerHTML = '';
+            
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    const row = document.createElement('tr');
+                    
+                    // 状态
+                    const stateCell = document.createElement('td');
+                    stateCell.textContent = `(${x},${y})`;
+                    if (x === startPos.x && y === startPos.y) {
+                        stateCell.innerHTML += ' <span style="color:#4ade80">S</span>';
+                    } else if (x === goalPos.x && y === goalPos.y) {
+                        stateCell.innerHTML += ' <span style="color:#fbbf24">G</span>';
+                    } else if (blackholes.has(state)) {
+                        stateCell.innerHTML += ' <span style="color:#666">X</span>';
+                    }
+                    row.appendChild(stateCell);
+                    
+                    // V(s)
+                    const vCell = document.createElement('td');
+                    vCell.className = 'value-cell';
+                    vCell.textContent = computeVFromQ(state).toFixed(2);
+                    row.appendChild(vCell);
+                    
+                    // Q(s, a)
+                    for (let action of ACTIONS) {
+                        const qCell = document.createElement('td');
+                        qCell.className = 'value-cell';
+                        qCell.textContent = Q[state][action.name].toFixed(2);
+                        row.appendChild(qCell);
+                    }
+                    
+                    // π(a|s)
+                    for (let action of ACTIONS) {
+                        const pCell = document.createElement('td');
+                        pCell.className = 'value-cell';
+                        pCell.textContent = policy[state][action.name].toFixed(2);
+                        row.appendChild(pCell);
+                    }
+                    
+                    tbody.appendChild(row);
+                }
+            }
+        }
+        
+        // ==================== 日志 ====================
+        function log(message) {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = 
+                '<div class="log-entry">等待训练开始...</div>';
+        }
+        
+        // ==================== 自测模块 ====================
+        function runTests() {
+            const results = document.getElementById('testResults');
+            results.innerHTML = '';
+            
+            let passCount = 0;
+            let failCount = 0;
+            
+            // 测试1: 环境初始化
+            const test1 = testEnvironmentInit();
+            addTestResult(results, '环境初始化测试', test1);
+            test1 ? passCount++ : failCount++;
+            
+            // 测试2: 策略概率和为1
+            const test2 = testPolicySum();
+            addTestResult(results, '策略概率归一化测试', test2);
+            test2 ? passCount++ : failCount++;
+            
+            // 测试3: 动作选择
+            const test3 = testActionSelection();
+            addTestResult(results, '动作选择测试', test3);
+            test3 ? passCount++ : failCount++;
+            
+            // 测试4: Return计算
+            const test4 = testReturnCalculation();
+            addTestResult(results, 'Return计算测试', test4);
+            test4 ? passCount++ : failCount++;
+            
+            // 测试5: 价值更新
+            const test5 = testValueUpdate();
+            addTestResult(results, '价值更新测试', test5);
+            test5 ? passCount++ : failCount++;
+            
+            // 总结
+            const summary = document.createElement('div');
+            summary.style.marginTop = '15px';
+            summary.style.fontWeight = 'bold';
+            summary.textContent = `测试结果: ${passCount} 通过, ${failCount} 失败`;
+            results.appendChild(summary);
+        }
+        
+        function addTestResult(container, name, passed) {
+            const div = document.createElement('div');
+            div.className = `test-result ${passed ? 'test-pass' : 'test-fail'}`;
+            div.textContent = `${passed ? '✓' : '✗'} ${name}`;
+            container.appendChild(div);
+        }
+        
+        function testEnvironmentInit() {
+            return gridSize > 0 && 
+                   Object.keys(V).length === gridSize * gridSize &&
+                   Object.keys(Q).length === gridSize * gridSize;
+        }
+        
+        function testPolicySum() {
+            for (let x = 0; x < gridSize; x++) {
+                for (let y = 0; y < gridSize; y++) {
+                    const state = `${x},${y}`;
+                    let sum = 0;
+                    for (let action of ACTIONS) {
+                        sum += policy[state][action.name];
+                    }
+                    if (Math.abs(sum - 1.0) > 0.001) return false;
+                }
+            }
+            return true;
+        }
+        
+        function testActionSelection() {
+            const state = '0,0';
+            let counts = {};
+            for (let action of ACTIONS) {
+                counts[action.name] = 0;
+            }
+            
+            for (let i = 0; i < 1000; i++) {
+                const action = selectAction(state);
+                counts[action.name]++;
+            }
+            
+            // 检查每个动作都有被选中的可能
+            for (let action of ACTIONS) {
+                if (counts[action.name] === 0) return false;
+            }
+            return true;
+        }
+        
+        function testReturnCalculation() {
+            // 构造一个测试episode
+            const testEpisode = [
+                {state: '0,0', action: 'right', reward: -1},
+                {state: '1,0', action: 'right', reward: -1},
+                {state: '2,0', action: 'right', reward: 10}
+            ];
+            
+            const G = calculateReturn(testEpisode);
+            // G = -1 + 1*(-1) + 1*1*10 = 8
+            const expected = -1 + gamma * (-1 + gamma * 10);
+            return Math.abs(G - expected) < 0.001;
+        }
+        
+        function testValueUpdate() {
+            const state = '0,0';
+            const oldV = computeVFromQ(state);
+            
+            // 构造一个测试episode
+            const testEpisode = [
+                {state: state, action: 'right', reward: 10, x: 0, y: 0}
+            ];
+            
+            updateValuesIncremental(testEpisode, 10);
+            
+            const newV = computeVFromQ(state);
+            const updated = Math.abs(newV - oldV) > 0.001;
+            
+            return updated;
+        }
+        
+        function runAccuracyTest() {
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<div class="log-entry">运行计算准确性测试...</div>';
+            
+            // 测试1: 折扣计算准确性
+            let pass = true;
+            const testCases = [
+                {rewards: [1, 1, 1], gamma: 1, expected: 3},
+                {rewards: [1, 1, 1], gamma: 0.9, expected: 1 + 0.9 + 0.81},
+                {rewards: [-1, -1, 10], gamma: 1, expected: 8}
+            ];
+            
+            for (let tc of testCases) {
+                const oldGamma = gamma;
+                gamma = tc.gamma;
+                const testEpisode = tc.rewards.map((r, i) => ({
+                    state: `${i},0`, action: 'right', reward: r, x: i, y: 0
+                }));
+                const G = calculateReturn(testEpisode);
+                gamma = oldGamma;
+                
+                if (Math.abs(G - tc.expected) > 0.001) {
+                    pass = false;
+                    addTestResult(results, `折扣计算测试 (γ=${tc.gamma})`, false);
+                }
+            }
+            
+            if (pass) {
+                addTestResult(results, '折扣计算准确性测试', true);
+            }
+            
+            // 测试2: 增量更新准确性（Q(s,a) 应收敛到该 episode 的 return）
+            const state = '5,5';
+            const testEpisode = [{state: state, action: 'up', reward: 5, x: 5, y: 5}];
+            
+            // 多次更新，检查 Q 是否收敛
+            for (let i = 0; i < 100; i++) {
+                updateValuesIncremental(testEpisode, 10);
+            }
+            
+            // Q(s,up) 应收敛到 5（单步 episode，reward=5, gamma=1 → G=5）
+            const converged = Math.abs(Q[state]['up'] - 5) < 0.5;
+            addTestResult(results, '增量更新收敛性测试', converged);
+            
+            // 测试3: 策略改进测试
+            const testState = '3,3';
+            Q[testState]['up'] = 10;
+            Q[testState]['right'] = 5;
+            Q[testState]['down'] = 3;
+            Q[testState]['left'] = 1;
+            
+            updatePolicy([{state: testState, action: 'up'}]);
+            
+            const improved = policy[testState]['up'] > policy[testState]['right'];
+            addTestResult(results, '策略改进测试', improved);
+            
+            const summary = document.createElement('div');
+            summary.style.marginTop = '15px';
+            summary.style.fontWeight = 'bold';
+            summary.textContent = '计算准确性测试完成';
+            results.appendChild(summary);
+        }
+        
+        // 页面加载时初始化
+        window.onload = init;
+    </script>
+</body>
+</html>

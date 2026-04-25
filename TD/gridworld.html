@@ -1,0 +1,2928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridWorld Exploration</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00d9ff;
+            margin-bottom: 10px;
+            font-size: 2rem;
+            text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 14px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(56, 239, 125, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(253, 203, 110, 0.4);
+        }
+
+        .grid-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .grid {
+            display: grid;
+            gap: 0;
+            background: #1a2a3a;
+            padding: 3px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            position: relative;
+            /* 棋盘格子分割线 */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .cell-normal {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: #55efc4;
+            font-size: 14px;
+        }
+
+        .cell-start {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            box-shadow: 0 0 15px rgba(0, 184, 148, 0.5);
+        }
+
+        .cell-goal {
+            background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+            color: white;
+            box-shadow: 0 0 15px rgba(108, 92, 231, 0.5);
+        }
+
+        .cell-blackhole {
+            background: linear-gradient(135deg, #d63031 0%, #e17055 100%);
+            color: white;
+            box-shadow: 0 0 15px rgba(214, 48, 49, 0.5);
+        }
+
+        .cell-agent {
+            background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+            color: #2d3436;
+            box-shadow: 0 0 20px rgba(253, 203, 110, 0.8);
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .cell-agent-on-blackhole {
+            background: linear-gradient(135deg, #ff7675 0%, #d63031 100%);
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .cell-agent-on-goal {
+            background: linear-gradient(135deg, #55efc4 0%, #00b894 100%);
+            animation: celebrate 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes celebrate {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.2) rotate(10deg); }
+        }
+
+        @keyframes drawPath {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00d9ff;
+        }
+
+        .stat-value.reward {
+            color: #ff7675;
+        }
+
+        .stat-value.terminated {
+            color: #fdcb6e;
+        }
+
+        .controls-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .controls-title {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+        }
+
+        .config-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .config-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+
+        .config-label {
+            width: 120px;
+            color: #888;
+        }
+
+        .config-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            background: #1a202c;
+            color: white;
+            font-size: 14px;
+        }
+
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            z-index: 100;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .message h2 {
+            color: #00d9ff;
+            margin-bottom: 15px;
+        }
+
+        .message p {
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .table-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .table-title {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .table-grid {
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+
+        .table-cell {
+            min-width: 60px;
+            padding: 8px 4px;
+            text-align: center;
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .table-cell-header {
+            background: rgba(0, 217, 255, 0.2);
+            color: #00d9ff;
+            font-weight: bold;
+        }
+
+        .table-cell-q {
+            color: #55efc4;
+        }
+
+        .table-cell-p {
+            color: #ffeaa7;
+        }
+
+        .table-row-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+
+        .tab-container {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .action-legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .action-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .action-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        /* Q-Learning 训练面板 */
+        .training-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .training-title {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .training-params {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .param-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .param-label {
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .param-value {
+            color: #00d9ff;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .param-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            background: #1a202c;
+            color: white;
+            font-size: 14px;
+        }
+
+        .param-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            background: #1a202c;
+            color: #55efc4;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2355efc4' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 30px;
+        }
+
+        .param-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .param-select option {
+            background: #1a202c;
+            color: #fff;
+            padding: 5px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            width: 0%;
+        }
+
+        .training-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .training-stat {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .training-stat-label {
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .training-stat-value {
+            color: #55efc4;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 3px;
+        }
+
+        /* 图表容器 */
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .chart-title {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        /* 训练日志 */
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            color: #888;
+            margin: 2px 0;
+        }
+
+        .log-entry.highlight {
+            color: #55efc4;
+        }
+
+        .log-entry.error {
+            color: #ff7675;
+        }
+
+        /* Episode详情表格 */
+        .episode-table-container {
+            max-height: 250px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .episode-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+        }
+
+        .episode-table th {
+            background: rgba(0, 217, 255, 0.2);
+            color: #00d9ff;
+            padding: 8px 6px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .episode-table td {
+            padding: 4px 6px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .episode-table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .episode-table tr:hover {
+            background: rgba(0, 217, 255, 0.1);
+        }
+
+        .episode-table .ep-num {
+            color: #888;
+            min-width: 50px;
+        }
+
+        .episode-table .ep-reward {
+            font-weight: bold;
+            min-width: 60px;
+        }
+
+        .episode-table .ep-reward.excellent {
+            color: #00ff88;
+        }
+
+        .episode-table .ep-reward.good {
+            color: #55efc4;
+        }
+
+        .episode-table .ep-reward.normal {
+            color: #ffeaa7;
+        }
+
+        .episode-table .ep-reward.bad {
+            color: #ff7675;
+        }
+
+        .episode-table .ep-reward.terrible {
+            color: #d63031;
+        }
+
+        .episode-table .ep-epsilon {
+            color: #a29bfe;
+            min-width: 50px;
+        }
+
+        .episode-table .ep-steps {
+            color: #74b9ff;
+            min-width: 40px;
+        }
+
+        /* 回放控件样式 */
+        .replay-controls {
+            background: linear-gradient(135deg, rgba(253, 121, 168, 0.1), rgba(253, 203, 110, 0.1));
+            border: 1px solid rgba(253, 121, 168, 0.3);
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 15px;
+        }
+
+        .replay-title {
+            color: #fdcb6e;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .replay-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .replay-input-group label {
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        .replay-input {
+            width: 80px;
+            padding: 6px 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(253, 121, 168, 0.4);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .replay-input:focus {
+            outline: none;
+            border-color: #fd79a8;
+            box-shadow: 0 0 10px rgba(253, 121, 168, 0.3);
+        }
+
+        .btn-replay {
+            padding: 6px 14px;
+            background: linear-gradient(135deg, #fd79a8, #fdcb6e);
+            border: none;
+            border-radius: 6px;
+            color: #1a1a2e;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-replay:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(253, 121, 168, 0.4);
+        }
+
+        .btn-clear {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #888;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-clear:hover {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: rgba(255, 107, 107, 0.4);
+            color: #ff6b6b;
+        }
+
+        .replay-info {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .expected-reward-info {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 15px;
+            border-left: 3px solid #00d9ff;
+        }
+
+        .expected-reward-info h4 {
+            color: #00d9ff;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .expected-reward-info p {
+            color: #888;
+            font-size: 12px;
+            line-height: 1.6;
+            margin: 4px 0;
+        }
+
+        .expected-reward-info .calc {
+            color: #55efc4;
+            font-family: 'Consolas', monospace;
+        }
+
+        /* 综合表格样式 */
+        .combined-legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .legend-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* 综合表格单元格 */
+        .combined-table-container {
+            overflow-x: auto;
+        }
+
+        .combined-table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 800px;
+        }
+
+        .combined-table th {
+            background: rgba(0, 217, 255, 0.2);
+            color: #00d9ff;
+            padding: 8px 4px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid rgba(0, 217, 255, 0.3);
+        }
+
+        .combined-table th.action-col {
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+        }
+
+        .combined-table td {
+            padding: 4px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 10px;
+        }
+
+        .combined-table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .combined-table tr:hover {
+            background: rgba(0, 217, 255, 0.05);
+        }
+
+        /* 状态单元格 */
+        .state-cell {
+            background: rgba(0, 0, 0, 0.3);
+            font-weight: bold;
+            color: #888;
+            min-width: 50px;
+        }
+
+        /* V值单元格 */
+        .v-cell {
+            background: rgba(85, 239, 196, 0.1);
+            color: #55efc4;
+            font-weight: bold;
+            min-width: 45px;
+        }
+
+        /* Q值单元格 */
+        .q-cell {
+            font-family: 'Consolas', monospace;
+            min-width: 40px;
+        }
+
+        /* 策略概率单元格 */
+        .p-cell {
+            font-family: 'Consolas', monospace;
+            min-width: 40px;
+        }
+
+        /* 特殊格子高亮 */
+        .cell-blackhole-row td {
+            background: linear-gradient(135deg, rgba(214, 48, 49, 0.3), rgba(225, 112, 85, 0.2)) !important;
+            color: #ff7675 !important;
+        }
+
+        .cell-goal-row td {
+            background: linear-gradient(135deg, rgba(108, 92, 231, 0.3), rgba(162, 155, 254, 0.2)) !important;
+            color: #a29bfe !important;
+        }
+
+        .cell-start-row td {
+            background: linear-gradient(135deg, rgba(0, 184, 148, 0.3), rgba(0, 206, 201, 0.2)) !important;
+            color: #00cec9 !important;
+        }
+
+        /* 当前智能体位置高亮 */
+        .agent-highlight {
+            background: rgba(253, 203, 110, 0.3) !important;
+            border: 2px solid #fdcb6e !important;
+        }
+
+        /* 最大化Q值高亮 */
+        .max-q {
+            background: rgba(85, 239, 196, 0.15);
+        }
+
+        /* 最大化策略概率高亮 */
+        .max-p {
+            background: rgba(255, 234, 167, 0.15);
+        }
+
+        /* 棋盘悬停气泡框 */
+        .cell-tooltip {
+            position: fixed;
+            background: rgba(10, 15, 30, 0.97);
+            border: 1px solid rgba(0, 217, 255, 0.5);
+            border-radius: 10px;
+            padding: 12px 16px;
+            pointer-events: none;
+            z-index: 9999;
+            display: none;
+            min-width: 220px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 217, 255, 0.15);
+            backdrop-filter: blur(8px);
+        }
+
+        .tooltip-pos {
+            color: #00d9ff;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+            padding-bottom: 6px;
+        }
+
+        .tooltip-type {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .tooltip-type.type-normal { background: rgba(85,239,196,0.15); color: #55efc4; }
+        .tooltip-type.type-start  { background: rgba(0,184,148,0.2);   color: #00b894; }
+        .tooltip-type.type-goal   { background: rgba(108,92,231,0.2);  color: #a29bfe; }
+        .tooltip-type.type-blackhole  { background: rgba(214,48,49,0.2);   color: #ff7675; }
+
+        .tooltip-v {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 4px 8px;
+            background: rgba(85, 239, 196, 0.08);
+            border-radius: 6px;
+        }
+
+        .tooltip-v-label {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .tooltip-v-value {
+            color: #55efc4;
+            font-weight: bold;
+            font-size: 13px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .tooltip-q-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+        }
+
+        .tooltip-q-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 3px 7px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 5px;
+            border-left: 2px solid transparent;
+        }
+
+        .tooltip-q-item.max-action {
+            background: rgba(85, 239, 196, 0.12);
+        }
+
+        .tooltip-q-label {
+            font-size: 11px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .tooltip-q-value {
+            font-size: 11px;
+            font-family: 'Consolas', monospace;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GridWorld Exploration</h1>
+        <p class="subtitle" id="subtitle">10 x 10 GRID WORLD | BALCKHOLE WALKING | TD(QL & SARSA) | Author: SuYun</p>
+
+
+        <!-- 环境参数配置 -->
+        <div class="training-panel">
+            <div class="training-title">🗺️ 环境参数配置</div>
+            <div class="training-params">
+                <div class="param-item">
+                    <div class="param-label">宽度 (列数)</div>
+                    <input type="number" class="param-input" id="gridWidth" value="10" step="1" min="5" max="30">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">高度 (行数)</div>
+                    <input type="number" class="param-input" id="gridHeight" value="10" step="1" min="5" max="30">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">黑洞概率 (%)</div>
+                    <input type="number" class="param-input" id="envBlackholeProb" value="25" step="1" min="0" max="50">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">普通格子奖励</div>
+                    <input type="number" class="param-input" id="envNormalReward" value="-1" step="1" min="-100" max="0">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">黑洞奖励</div>
+                    <input type="number" class="param-input" id="envBlackholeReward" value="-100" step="1" min="-1000" max="0">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">终点奖励</div>
+                    <input type="number" class="param-input" id="envGoalReward" value="0" step="1" min="0" max="100">
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn-warning" onclick="generateNewEnvironment()">🎲 生成环境</button>
+            </div>
+        </div>
+
+        <!-- 训练超参数配置 -->
+        <div class="training-panel">
+            <div class="training-title">⚙️ 训练超参数配置</div>
+            <div class="training-params">
+                <div class="param-item">
+                    <div class="param-label">算法选择</div>
+                    <select class="param-select" id="algorithmSelect">
+                        <option value="qlearning">Q-Learning</option>
+                        <option value="sarsa">SARSA (On-Policy)</option>
+                    </select>
+                </div>
+                <div class="param-item">
+                    <div class="param-label">初始探索率 ε_start</div>
+                    <input type="number" class="param-input" id="epsilonStart" value="1.0" step="0.05" min="0" max="1">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">最终探索率 ε_end</div>
+                    <input type="number" class="param-input" id="epsilonEnd" value="0.01" step="0.01" min="0" max="1">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">探索率衰减率</div>
+                    <input type="number" class="param-input" id="epsilonDecay" value="0.995" step="0.001" min="0.9" max="1">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">学习率 α</div>
+                    <input type="number" class="param-input" id="alpha" value="0.5" step="0.05" min="0" max="1">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">折扣因子 γ</div>
+                    <input type="number" class="param-input" id="gamma" value="1.0" step="0.1" min="0" max="1">
+                </div>
+                <div class="param-item">
+                    <div class="param-label">Episode 数量</div>
+                    <input type="number" class="param-input" id="numEpisodes" value="2000" step="100" min="100" max="10000">
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn-primary" onclick="startTraining()">▶ 开始训练</button>
+                <button class="btn-danger" onclick="stopTraining()">■ 停止训练</button>
+                <button class="btn-success" onclick="resetQTables()">↺ 重置表格</button>
+            </div>
+        </div>
+
+                <!-- Episode回放控件 -->
+                <div class="replay-controls">
+                    <div class="replay-title">🎬 Episode 回放</div>
+                    <div class="replay-input-group">
+                        <label for="replayEpisode">Episode #</label>
+                        <input type="number" id="replayEpisode" class="replay-input" value="2000" min="1" max="2000" onkeypress="if(event.key==='Enter')playEpisodePath()">
+                        <button class="btn-replay" onclick="playEpisodePath()">▶ 播放</button>
+                        <button class="btn-clear" onclick="clearPath()">✕ 清除</button>
+                    </div>
+                    <div class="replay-info" id="replayInfo">训练完成后可回放路径</div>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="trainingProgress"></div>
+                </div>
+                <div class="training-stats">
+                    <div class="training-stat">
+                        <div class="training-stat-label">当前 Episode</div>
+                        <div class="training-stat-value" id="currentEpisode">0</div>
+                    </div>
+                    <div class="training-stat">
+                        <div class="training-stat-label">总 Episodes</div>
+                        <div class="training-stat-value" id="totalEpisodes">2000</div>
+                    </div>
+                    <div class="training-stat">
+                        <div class="training-stat-label">探索率 ε</div>
+                        <div class="training-stat-value" id="currentEpsilon">-</div>
+                    </div>
+                    <div class="training-stat">
+                        <div class="training-stat-label">最近奖励</div>
+                        <div class="training-stat-value" id="recentReward">-</div>
+                    </div>
+                    <div class="training-stat">
+                        <div class="training-stat-label">平均奖励</div>
+                        <div class="training-stat-value" id="avgReward">-</div>
+                    </div>
+                    <div class="training-stat">
+                        <div class="training-stat-label">黑洞个数</div>
+                        <div class="training-stat-value" id="blackholeCount">-</div>
+                    </div>
+                </div>
+                <!-- 预期奖励说明 -->
+                <div class="expected-reward-info" id="expectedRewardInfo">
+                    <h4>📊 奖励计算原理</h4>
+                    <p>• 棋盘: 宽度W × 高度H，起始点 (0,0)，终点 (W-1, H-1)</p>
+                    <p>• <b>最短路径步数</b> = (W-1) + (H-1) 步（曼哈顿距离）</p>
+                    <p>• 普通格子奖励: <span class="calc" id="normalRewardDisplay">-1</span>，终点奖励: <span class="calc" id="goalRewardDisplay">0</span></p>
+                    <p>• <b>理论最优奖励</b> = (W+H-2) × (普通奖励) = <span class="calc" id="optimalRewardDisplay">(W+H-2)×r</span></p>
+                    <p>• 训练后期望: 收敛到接近理论最优（取决于黑洞布局和探索效率）</p>
+                </div>
+
+                <!-- Episode详情表格 -->
+                <div class="episode-table-container" id="episodeTableContainer" style="display: none;">
+                    <table class="episode-table">
+                        <thead>
+                            <tr>
+                                <th>Episode</th>
+                                <th>Return (奖励)</th>
+                                <th>ε 探索率</th>
+                                <th>评价</th>
+                            </tr>
+                        </thead>
+                        <tbody id="episodeTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="log-container" id="trainingLog"></div>
+            </div>
+
+        <!-- 手动模式的棋盘和统计（在训练模式下也显示） -->
+    <div id="gameArea">
+        <div class="grid-container">
+            <div class="grid" id="grid"></div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(135deg, #00b894, #00cec9);"></div>
+                <span>起点 S</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(135deg, #6c5ce7, #a29bfe);"></div>
+                <span>终点 G</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(135deg, #d63031, #e17055);"></div>
+                <span>黑洞 X (<span id="blackholeRewardDisplay">-100</span>)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(135deg, #2d3748, #1a202c);"></div>
+                <span>普通 (<span id="normalRewardDisplay2">-1</span>)</span>
+            </div>
+        </div>
+
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">位置</div>
+                <div class="stat-value" id="position">(0, 0)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">步数</div>
+                <div class="stat-value" id="steps">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总奖励</div>
+                <div class="stat-value reward" id="reward">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">状态</div>
+                <div class="stat-value terminated" id="status">运行中</div>
+            </div>
+        </div>
+        <!-- 手动控制已移除，保留棋盘和统计信息 -->
+    </div>
+
+        <!-- 奖励曲线图表 -->
+        <div class="chart-container">
+            <div class="chart-title">Episode 奖励曲线</div>
+            <div class="chart-wrapper">
+                <canvas id="rewardChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 综合表格可视化 -->
+        <div class="table-section">
+            <div class="table-title">📊 综合学习表格</div>
+            <p style="color: #888; font-size: 12px; margin-bottom: 10px;" id="combinedTableDesc">
+                V(s) 状态价值 | Q(s,a) 动作价值 | π(a|s) 策略概率 | 尺寸: 10×10
+            </p>
+            
+            <!-- 图例 -->
+            <div class="combined-legend">
+                <div style="color: #55efc4; font-weight: bold;">V: 状态价值</div>
+                <div class="legend-divider"></div>
+                <div class="action-item">
+                    <div class="action-color" style="background: #00b894;"></div>
+                    <span>Q0/π0: 上 (↑)</span>
+                </div>
+                <div class="action-item">
+                    <div class="action-color" style="background: #0984e3;"></div>
+                    <span>Q1/π1: 下 (↓)</span>
+                </div>
+                <div class="action-item">
+                    <div class="action-color" style="background: #e17055;"></div>
+                    <span>Q2/π2: 左 (←)</span>
+                </div>
+                <div class="action-item">
+                    <div class="action-color" style="background: #6c5ce7;"></div>
+                    <span>Q3/π3: 右 (→)</span>
+                </div>
+            </div>
+            
+            <div class="table-grid" id="combinedTableGrid"></div>
+        </div>
+    </div>
+
+    <div class="message" id="message">
+        <h2 id="messageTitle">游戏结束</h2>
+        <p id="messageText">你踩到了黑洞！</p>
+        <button class="btn-primary" onclick="closeMessage(); reset();">重新开始</button>
+    </div>
+
+    <!-- 棋盘格子悬停气泡框 -->
+    <div class="cell-tooltip" id="cellTooltip"></div>
+
+    <script>
+        // ========== GridWorld 环境 ==========
+
+        class GridWorld {
+            constructor(width = 10, height = 10, blackholeProb = 0.05, normalReward = -1, blackholeReward = -100, goalReward = 0) {
+                this.width = width;
+                this.height = height;
+                this.blackholeProb = blackholeProb;
+                this.start = { x: 0, y: 0 };
+                this.goal = { x: width - 1, y: height - 1 };
+                this.grid = [];
+                this.agentPos = { ...this.start };
+                this.totalSteps = 0;
+                this.totalReward = 0;
+                this.terminated = false;
+                this.seedValue = 42;
+                
+                // 可配置的奖励值
+                this.normalReward = normalReward;
+                this.blackholeReward = blackholeReward;
+                this.goalReward = goalReward;
+
+                // ========== Q-Table (动作价值函数) ==========
+                // 尺寸: height x width x 4
+                // qTable[y][x][action] - 状态(y,x)执行action的价值
+                this.qTable = [];
+
+                // ========== V-Table (状态价值函数) ==========
+                // 尺寸: height x width
+                // vTable[y][x] - 状态(y,x)的价值 = max_a Q(y,x,a)
+                this.vTable = [];
+
+                // ========== Policy Table (策略函数) ==========
+                // 尺寸: height x width x 4
+                // policy[y][x][action] - 在状态(y,x)选择action的概率
+                this.policy = [];
+
+                this.initializeTables();
+            }
+
+            initializeTables() {
+                // 初始化Q-table为0
+                this.qTable = [];
+                for (let y = 0; y < this.height; y++) {
+                    const row = [];
+                    for (let x = 0; x < this.width; x++) {
+                        row.push([0, 0, 0, 0]);  // 4个动作的Q值
+                    }
+                    this.qTable.push(row);
+                }
+
+                // 初始化V-table为0
+                this.vTable = [];
+                for (let y = 0; y < this.height; y++) {
+                    const row = [];
+                    for (let x = 0; x < this.width; x++) {
+                        row.push(0);  // V(s) = max_a Q(s,a)
+                    }
+                    this.vTable.push(row);
+                }
+
+                // 初始化策略表格为均匀分布 (1/4)
+                this.policy = [];
+                for (let y = 0; y < this.height; y++) {
+                    const row = [];
+                    for (let x = 0; x < this.width; x++) {
+                        row.push([0.25, 0.25, 0.25, 0.25]);  // 均匀分布
+                    }
+                    this.policy.push(row);
+                }
+
+                // 初始化网格（生成黑洞布局）
+                this.generateblackholes();
+            }
+
+            // 简单的伪随机数生成器
+            seededRandom(seed) {
+                const x = Math.sin(seed++) * 10000;
+                return x - Math.floor(x);
+            }
+
+            reset(seed = null) {
+                if (seed !== null) {
+                    this.seedValue = seed;
+                }
+                this.agentPos = { ...this.start };
+                this.totalSteps = 0;
+                this.totalReward = 0;
+                this.terminated = false;
+                this.generateblackholes();
+
+                // 重置Q-table和Policy-table
+                this.initializeTables();
+
+                return { ...this.agentPos };
+            }
+            gotoStart(seed = null) {
+                if (seed !== null) {
+                    this.seedValue = seed;
+                }
+                this.agentPos = { ...this.start };
+                this.totalSteps = 0;
+                this.totalReward = 0;
+                this.terminated = false;
+       
+
+                return { ...this.agentPos };
+            }
+            // ========== Q-Table 访问方法 ==========
+            getQValue(x, y, action) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height || action < 0 || action > 3) {
+                    return 0;
+                }
+                return this.qTable[y][x][action];
+            }
+
+            setQValue(x, y, action, value) {
+                if (x >= 0 && x < this.width && y >= 0 && y < this.height && action >= 0 && action <= 3) {
+                    this.qTable[y][x][action] = value;
+                }
+            }
+
+            getQValues(x, y) {
+                return this.qTable[y][x] || [0, 0, 0, 0];
+            }
+
+            // ========== V-Table 访问方法 ==========
+            getVValue(x, y) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+                    return 0;
+                }
+                return this.vTable[y][x];
+            }
+
+            setVValue(x, y, value) {
+                if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                    this.vTable[y][x] = value;
+                }
+            }
+
+            // 根据Q值更新V值: V(s) = max_a Q(s,a)
+            updateVFromQ(x, y) {
+                const qVals = this.getQValues(x, y);
+                const maxQ = Math.max(...qVals);
+                this.setVValue(x, y, maxQ);
+            }
+
+            // ========== Policy Table 访问方法 ==========
+            getPolicy(x, y, action) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height || action < 0 || action > 3) {
+                    return 0;
+                }
+                return this.policy[y][x][action];
+            }
+
+            setPolicy(x, y, action, probability) {
+                if (x >= 0 && x < this.width && y >= 0 && y < this.height && action >= 0 && action <= 3) {
+                    this.policy[y][x][action] = probability;
+                }
+            }
+
+            getPolicyValues(x, y) {
+                return this.policy[y][x] || [0.25, 0.25, 0.25, 0.25];
+            }
+
+            generateblackholes() {
+                this.grid = [];
+                let seed = this.seedValue;
+
+                for (let y = 0; y < this.height; y++) {
+                    const row = [];
+                    for (let x = 0; x < this.width; x++) {
+                        if (x === this.start.x && y === this.start.y) {
+                            row.push('START');
+                        } else if (x === this.goal.x && y === this.goal.y) {
+                            row.push('GOAL');
+                        } else {
+                            const rand = this.seededRandom(seed++);
+                            if (rand < this.blackholeProb) {
+                                row.push('BLACKHOLE');
+                            } else {
+                                row.push('NORMAL');
+                            }
+                        }
+                    }
+                    this.grid.push(row);
+                }
+            }
+
+            step(action) {
+                if (this.terminated) {
+                    return { pos: this.agentPos, reward: 0, done: true };
+                }
+
+                // 动作: 0=上, 1=下, 2=左, 3=右
+                let newX = this.agentPos.x;
+                let newY = this.agentPos.y;
+
+                switch (action) {
+                    case 0: // 上
+                        newY = Math.max(0, newY - 1);
+                        break;
+                    case 1: // 下
+                        newY = Math.min(this.height - 1, newY + 1);
+                        break;
+                    case 2: // 左
+                        newX = Math.max(0, newX - 1);
+                        break;
+                    case 3: // 右
+                        newX = Math.min(this.width - 1, newX + 1);
+                        break;
+                }
+
+                this.agentPos = { x: newX, y: newY };
+                this.totalSteps++;
+
+                // 计算奖励（使用可配置的奖励值）
+                let reward;
+                const cellType = this.grid[newY][newX];
+
+                if (cellType === 'BLACKHOLE') {
+                    reward = this.blackholeReward;
+                    this.terminated = true;
+                } else if (cellType === 'GOAL') {
+                    reward = this.goalReward;
+                    this.terminated = true;
+                } else {
+                    reward = this.normalReward;
+                }
+
+                this.totalReward += reward;
+
+                return {
+                    pos: { ...this.agentPos },
+                    reward,
+                    done: this.terminated
+                };
+            }
+
+            getCellType(x, y) {
+                return this.grid[y][x];
+            }
+
+            getState() {
+                return { ...this.agentPos };
+            }
+
+            // 获取黑洞个数
+            getBlackholeCount() {
+                let count = 0;
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.grid[y][x] === 'BLACKHOLE') {
+                            count++;
+                        }
+                    }
+                }
+                return count;
+            }
+        }
+
+        // ========== 全局变量 ==========
+
+        let env;
+        let cells = [];  // 棋盘格子元素数组，用于路径高亮
+
+        // ========== Q-Learning 相关变量 ==========
+        let isTraining = false;
+        let shouldStopTraining = false;
+        let trainingInterval = null;
+        let episodeRewards = [];  // 记录每个Episode的总奖励
+        let episodeTrajectories = [];  // 记录每个Episode的路径轨迹 [[{x,y}, ...], ...]
+        let rewardChart = null;
+        let currentMode = 'manual';
+
+        // ========== Q-Learning 核心算法 ==========
+
+        /**
+         * ε-贪婪策略（行为策略）
+         * @param x X坐标
+         * @param y Y坐标
+         * @param epsilon 探索概率
+         * @returns 选择的动作
+         */
+        function epsilonGreedyPolicy(x, y, epsilon) {
+            if (Math.random() < epsilon) {
+                // 探索：随机选择动作
+                return Math.floor(Math.random() * 4);
+            } else {
+                // 利用：选择Q值最大的动作
+                return getMaxQActions(x, y);
+            }
+        }
+
+        /**
+         * 获取Q值最大的动作（目标策略）
+         * @param x X坐标
+         * @param y Y坐标
+         * @returns Q值最大的动作
+         */
+        function getMaxQAction(x, y) {
+            const qVals = env.getQValues(x, y);
+            let maxAction = 0;
+            let maxValue = qVals[0];
+
+            for (let a = 1; a < 4; a++) {
+                if (qVals[a] > maxValue) {
+                    maxValue = qVals[a];
+                    maxAction = a;
+                }
+            }
+            return maxAction;
+        }
+
+        /**
+         * 获取Q值最大的动作列表（用于处理并列最大值）
+         * @param x X坐标
+         * @param y Y坐标
+         * @returns Q值最大的动作列表
+         */
+        function getMaxQActions(x, y) {
+            const qVals = env.getQValues(x, y);
+            let maxValue = qVals[0];
+            let maxActions = [0];
+
+            for (let a = 1; a < 4; a++) {
+                if (qVals[a] > maxValue) {
+                    maxValue = qVals[a];
+                    maxActions = [a];
+                } else if (qVals[a] === maxValue) {
+                    maxActions.push(a);
+                }
+            }
+            return maxActions[Math.floor(Math.random() * maxActions.length)];
+            //return maxActions;
+        }
+
+        /**
+         * Q-Learning 更新（保留，用于向后兼容）
+         * Q(s,a) <- Q(s,a) + α * (r + γ * max_a' Q(s',a') - Q(s,a))
+         */
+        function updateQValue(sx, sy, action, reward, nsx, nsy, alpha, gamma, done) {
+            const currentQ = env.getQValue(sx, sy, action);
+
+            let targetQ;
+            if (done) {
+                // 终止状态，目标Q值为0
+                targetQ = 0;
+            } else {
+                // 非终止状态，使用最大Q值
+                const maxAction = getMaxQActions(nsx, nsy);
+                targetQ = env.getQValue(nsx, nsy, maxAction);
+            }
+
+            // Q-Learning 更新公式
+            const newQ = currentQ + alpha * (reward + gamma * targetQ - currentQ);
+            env.setQValue(sx, sy, action, newQ);
+
+            // 更新状态价值函数 V(s) = max_a Q(s,a)
+            env.updateVFromQ(sx, sy);
+
+            // 更新策略表格 - 基于更新后的Q值
+            updatePolicyFromQ(sx, sy);
+        }
+
+        /**
+         * SARSA 更新（On-Policy TD 控制）
+         * Q(s,a) <- Q(s,a) + α * (r + γ * Q(s',a') - Q(s,a))
+         * 其中 a' 是下一状态 s' 使用 ε-贪婪策略选择的动作
+         * @param sx, sy 当前状态坐标
+         * @param action 当前动作
+         * @param reward 获得的奖励
+         * @param nsx, nsy 下一状态坐标
+         * @param nextAction 下一动作（由 ε-贪婪策略选择）
+         * @param alpha 学习率
+         * @param gamma 折扣因子
+         * @param done 是否终止
+         */
+        function updateQSarsa(sx, sy, action, reward, nsx, nsy, nextAction, alpha, gamma, done) {
+            const currentQ = env.getQValue(sx, sy, action);
+
+            let targetQ;
+            if (done) {
+                // 终止状态，目标Q值为0
+                targetQ = 0;
+            } else {
+                // 非终止状态，使用下一动作的Q值（而非最大值）
+                targetQ = env.getQValue(nsx, nsy, nextAction);
+            }
+
+            // SARSA 更新公式
+            const newQ = currentQ + alpha * (reward + gamma * targetQ - currentQ);
+            env.setQValue(sx, sy, action, newQ);
+
+            // 更新状态价值函数 V(s) = max_a Q(s,a)
+            env.updateVFromQ(sx, sy);
+
+            // 更新策略表格
+            updatePolicyFromQ(sx, sy);
+        }
+
+        /**
+         * 更新策略表格（基于当前Q值）
+         * 贪婪策略：将最大Q值对应的动作概率设为1，其他为0
+         * ε-软策略：给最大Q值动作更高概率，但保持一定随机性
+         */
+        function updatePolicyFromQ(x, y) {
+            const qVals = env.getQValues(x, y);
+            
+            // 找到所有最大Q值对应的动作
+            let maxValue = qVals[0];
+            let maxActions = [0];
+            
+            for (let a = 1; a < 4; a++) {
+                if (qVals[a] > maxValue) {
+                    maxValue = qVals[a];
+                    maxActions = [a];
+                } else if (qVals[a] === maxValue) {
+                    maxActions.push(a);
+                }
+            }
+            
+            // 设置策略：最大Q值动作均匀分配概率，其他动作为0
+            for (let a = 0; a < 4; a++) {
+                if (maxActions.includes(a)) {
+                    env.setPolicy(x, y, a, 1.0 / maxActions.length);
+                } else {
+                    env.setPolicy(x, y, a, 0);
+                }
+            }
+        }
+
+        /**
+         * 运行一个Episode（Q-Learning）
+         * @param epsilon 当前探索率
+         * @param alpha 学习率
+         * @param gamma 折扣因子
+         * @returns {totalReward, steps} episode的总奖励和步数
+         */
+        function runEpisodeQL(epsilon, alpha, gamma) {
+        //   env.reset();  // 重置环境，但保持Q-table
+            env.gotoStart();
+            let totalReward = 0;
+            let steps = 0;
+            const maxSteps = 1000;  // 防止无限循环
+            const trajectory = [];  // 记录本Episode的路径
+
+            while (!env.terminated && steps < maxSteps) {
+                const state = env.getState();
+                const sx = state.x;
+                const sy = state.y;
+
+                // 记录当前位置到轨迹
+                trajectory.push({ x: sx, y: sy });
+
+                // 行为策略：ε-贪婪
+                const action = epsilonGreedyPolicy(sx, sy, epsilon);
+
+                // 执行动作
+                const result = env.step(action);
+                const nsx = result.pos.x;
+                const nsy = result.pos.y;
+                const reward = result.reward;
+                const done = result.done;
+
+                // 更新Q值
+                updateQValue(sx, sy, action, reward, nsx, nsy, alpha, gamma, done);
+
+                totalReward += reward;
+                steps++;
+            }
+
+            // 记录终止位置
+            const finalState = env.getState();
+            trajectory.push({ x: finalState.x, y: finalState.y });
+
+            // 保存轨迹到全局数组
+            episodeTrajectories.push(trajectory);
+
+            return { totalReward, steps };
+        }
+
+        /**
+         * 运行一个Episode（SARSA - On-Policy TD 控制）
+         * SARSA 的核心区别：选择下一个动作 a'，然后用 Q(s',a') 作为目标值
+         * @param epsilon 当前探索率
+         * @param alpha 学习率
+         * @param gamma 折扣因子
+         * @returns {totalReward, steps} episode的总奖励和步数
+         */
+        function runEpisodeSarsa(epsilon, alpha, gamma) {
+            env.gotoStart();
+            let totalReward = 0;
+            let steps = 0;
+            const maxSteps = 1000;
+            const trajectory = [];
+
+            // 初始状态：使用 ε-贪婪策略选择第一个动作
+            const startState = env.getState();
+            trajectory.push({ x: startState.x, y: startState.y });
+            let currentAction = epsilonGreedyPolicy(startState.x, startState.y, epsilon);
+
+            while (!env.terminated && steps < maxSteps) {
+                const state = env.getState();
+                const sx = state.x;
+                const sy = state.y;
+
+                // 执行当前动作
+                const result = env.step(currentAction);
+                const nsx = result.pos.x;
+                const nsy = result.pos.y;
+                const reward = result.reward;
+                const done = result.done;
+
+                // SARSA 核心：在下一状态 s' 使用 ε-贪婪策略选择下一个动作 a'
+                let nextAction;
+                if (done) {
+                    // 终止状态，不需要选择下一动作
+                    nextAction = 0;
+                } else {
+                    nextAction = epsilonGreedyPolicy(nsx, nsy, epsilon);
+                    // 记录新位置到轨迹
+                    trajectory.push({ x: nsx, y: nsy });
+                }
+
+                // SARSA 更新：使用 Q(s',a') 而不是 max Q(s',a')
+                updateQSarsa(sx, sy, currentAction, reward, nsx, nsy, nextAction, alpha, gamma, done);
+
+                totalReward += reward;
+                steps++;
+
+                // 准备下一次迭代：当前状态和动作变为下一状态和动作
+                currentAction = nextAction;
+            }
+
+            // 记录终止位置
+            const finalState = env.getState();
+            trajectory.push({ x: finalState.x, y: finalState.y });
+
+            // 保存轨迹到全局数组
+            episodeTrajectories.push(trajectory);
+
+            return { totalReward, steps };
+        }
+
+        /**
+         * 计算衰减后的探索率
+         * @param {number} episode - 当前Episode编号（从1开始）
+         * @returns {number} 衰减后的探索率
+         */
+        function getDecayedEpsilon(episode) {
+            const epsilonStart = parseFloat(document.getElementById('epsilonStart').value);
+            const epsilonEnd = parseFloat(document.getElementById('epsilonEnd').value);
+            const decay = parseFloat(document.getElementById('epsilonDecay').value);
+            // 衰减公式: ε = max(ε_end, ε_start × decay^episode)
+            const decayed = epsilonStart * Math.pow(decay, episode - 1);
+            return Math.max(epsilonEnd, decayed);
+        }
+
+        /**
+         * 训练Q-Learning
+         */
+        function trainQL() {
+            const epsilonStart = parseFloat(document.getElementById('epsilonStart').value);
+            const epsilonEnd = parseFloat(document.getElementById('epsilonEnd').value);
+            const decay = parseFloat(document.getElementById('epsilonDecay').value);
+            const alpha = parseFloat(document.getElementById('alpha').value);
+            const gamma = parseFloat(document.getElementById('gamma').value);
+            const numEpisodes = parseInt(document.getElementById('numEpisodes').value);
+
+            shouldStopTraining = false;
+            isTraining = true;
+            episodeRewards = [];
+            episodeTrajectories = [];  // 清空轨迹记录
+
+            document.getElementById('totalEpisodes').textContent = numEpisodes;
+            document.getElementById('currentEpisode').textContent = '0';
+            document.getElementById('currentEpsilon').textContent = getDecayedEpsilon(1).toFixed(3);
+            document.getElementById('recentReward').textContent = '-';
+          //  document.getElementById('avgReward').textContent = '-';
+            document.getElementById('trainingProgress').style.width = '0%';
+            document.getElementById('trainingLog').innerHTML = '';
+
+            // 显示Episode详情表格
+            document.getElementById('episodeTableContainer').style.display = 'block';
+            document.getElementById('episodeTableBody').innerHTML = '';
+
+            // 初始化图表
+            initRewardChart();
+
+            // 添加日志
+            addLog(`开始 Q-Learning 训练...`, 'highlight');
+            addLog(`环境参数: 尺寸=${env.width}×${env.height}, 黑洞概率=${(env.blackholeProb * 100).toFixed(0)}%`);
+            addLog(`奖励设置: 普通=${env.normalReward}, 黑洞=${env.blackholeReward}, 终点=${env.goalReward}`);
+            addLog(`训练参数: ε=${epsilonStart} → ${epsilonEnd} (衰减率=${decay}), α=${alpha}, γ=${gamma}`);
+            addLog(`Episodes=${numEpisodes}`);
+
+            // 使用setTimeout分批执行，避免阻塞UI
+            let episode = 0;
+            const batchSize = 10;  // 每批处理的Episode数量
+            let episodeData = [];  // 存储每条Episode的详情
+
+            function processBatch() {
+                if (shouldStopTraining || episode >= numEpisodes) {
+                    if (!shouldStopTraining) {
+                        finishTraining();
+                    }
+                    return;
+                }
+
+                for (let i = 0; i < batchSize && episode < numEpisodes; i++) {
+                    // 使用衰减后的探索率
+                    const currentEpsilon = getDecayedEpsilon(episode + 1);
+                    const result = runEpisodeQL(currentEpsilon, alpha, gamma);
+                    episodeRewards.push(result.totalReward);
+                    episodeData.push({
+                        episode: episode + 1,
+                        reward: result.totalReward,
+                        epsilon: currentEpsilon,
+                        steps: result.steps
+                    });
+                    episode++;
+                }
+
+                // 更新UI
+                const progress = (episode / numEpisodes) * 100;
+                document.getElementById('trainingProgress').style.width = `${progress}%`;
+                document.getElementById('currentEpisode').textContent = episode;
+                
+                // 更新当前探索率（衰减后的值）
+                document.getElementById('currentEpsilon').textContent = getDecayedEpsilon(episode).toFixed(3);
+
+                // 最近奖励
+                const recentReward = episodeRewards[episodeRewards.length - 1];
+                document.getElementById('recentReward').textContent = recentReward;
+
+                // 平均奖励
+                const avgReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
+                document.getElementById('avgReward').textContent = avgReward.toFixed(1);
+
+                // 更新Episode详情表格（每10个Episode更新一次）
+                if (episode % 10 === 0) {
+                    updateEpisodeTable(episodeData);
+                }
+
+                // 更新图表（每10个Episode更新一次）
+                if (episode % 10 === 0) {
+                    updateRewardChart();
+                }
+
+                // 更新棋盘显示和黑洞个数（每50个Episode更新一次）
+                if (episode % 50 === 0) {
+                    render();
+                    updateStats();
+                    document.getElementById('blackholeCount').textContent = env.getBlackholeCount();
+                }
+
+                // 每100个Episode记录日志
+                if (episode % 100 === 0) {
+                    addLog(`Episode ${episode}/${numEpisodes} 完成, 最近奖励: ${recentReward}, 平均: ${avgReward.toFixed(1)}`);
+                }
+
+                // 继续下一批
+                setTimeout(processBatch, 0);
+            }
+
+            processBatch();
+        }
+
+        /**
+         * 训练SARSA（On-Policy TD 控制）
+         */
+        function trainSarsa() {
+            const epsilonStart = parseFloat(document.getElementById('epsilonStart').value);
+            const epsilonEnd = parseFloat(document.getElementById('epsilonEnd').value);
+            const decay = parseFloat(document.getElementById('epsilonDecay').value);
+            const alpha = parseFloat(document.getElementById('alpha').value);
+            const gamma = parseFloat(document.getElementById('gamma').value);
+            const numEpisodes = parseInt(document.getElementById('numEpisodes').value);
+
+            shouldStopTraining = false;
+            isTraining = true;
+            episodeRewards = [];
+            episodeTrajectories = [];
+
+            document.getElementById('totalEpisodes').textContent = numEpisodes;
+            document.getElementById('currentEpisode').textContent = '0';
+            document.getElementById('currentEpsilon').textContent = getDecayedEpsilon(1).toFixed(3);
+            document.getElementById('recentReward').textContent = '-';
+            document.getElementById('trainingProgress').style.width = '0%';
+            document.getElementById('trainingLog').innerHTML = '';
+
+            // 显示Episode详情表格
+            document.getElementById('episodeTableContainer').style.display = 'block';
+            document.getElementById('episodeTableBody').innerHTML = '';
+
+            // 初始化图表
+            initRewardChart();
+
+            // 添加日志
+            addLog(`开始 SARSA 训练 (On-Policy)...`, 'highlight');
+            addLog(`环境参数: 尺寸=${env.width}×${env.height}, 黑洞概率=${(env.blackholeProb * 100).toFixed(0)}%`);
+            addLog(`奖励设置: 普通=${env.normalReward}, 黑洞=${env.blackholeReward}, 终点=${env.goalReward}`);
+            addLog(`训练参数: ε=${epsilonStart} → ${epsilonEnd} (衰减率=${decay}), α=${alpha}, γ=${gamma}`);
+            addLog(`Episodes=${numEpisodes}`);
+
+            // 使用setTimeout分批执行，避免阻塞UI
+            let episode = 0;
+            const batchSize = 10;
+            let episodeData = [];
+
+            function processBatch() {
+                if (shouldStopTraining || episode >= numEpisodes) {
+                    if (!shouldStopTraining) {
+                        finishTraining();
+                    }
+                    return;
+                }
+
+                for (let i = 0; i < batchSize && episode < numEpisodes; i++) {
+                    const currentEpsilon = getDecayedEpsilon(episode + 1);
+                    const result = runEpisodeSarsa(currentEpsilon, alpha, gamma);
+                    episodeRewards.push(result.totalReward);
+                    episodeData.push({
+                        episode: episode + 1,
+                        reward: result.totalReward,
+                        epsilon: currentEpsilon,
+                        steps: result.steps
+                    });
+                    episode++;
+                }
+
+                const progress = (episode / numEpisodes) * 100;
+                document.getElementById('trainingProgress').style.width = `${progress}%`;
+                document.getElementById('currentEpisode').textContent = episode;
+                document.getElementById('currentEpsilon').textContent = getDecayedEpsilon(episode).toFixed(3);
+
+                const recentReward = episodeRewards[episodeRewards.length - 1];
+                document.getElementById('recentReward').textContent = recentReward;
+
+                const avgReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
+                document.getElementById('avgReward').textContent = avgReward.toFixed(1);
+
+                if (episode % 10 === 0) {
+                    updateEpisodeTable(episodeData);
+                }
+
+                if (episode % 10 === 0) {
+                    updateRewardChart();
+                }
+
+                if (episode % 50 === 0) {
+                    render();
+                    updateStats();
+                    document.getElementById('blackholeCount').textContent = env.getBlackholeCount();
+                }
+
+                if (episode % 100 === 0) {
+                    addLog(`Episode ${episode}/${numEpisodes} 完成, 最近奖励: ${recentReward}, 平均: ${avgReward.toFixed(1)}`);
+                }
+
+                setTimeout(processBatch, 0);
+            }
+
+            processBatch();
+        }
+
+        /**
+         * 训练完成处理
+         */
+        function finishTraining() {
+            isTraining = false;
+            addLog(`训练完成！共 ${episodeRewards.length} Episodes`, 'highlight');
+
+            // 最终更新图表
+            updateRewardChart();
+
+            // 更新棋盘显示（使用训练环境的黑洞配置）
+            render();
+            updateStats();
+            updateRewardDisplays();
+            document.getElementById('blackholeCount').textContent = env.getBlackholeCount();
+
+            // 更新表格显示
+            renderQTable();
+            renderVTable();
+            renderPolicyTable();
+
+            // 显示最终统计
+            const avgReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
+            const minReward = Math.min(...episodeRewards);
+            const maxReward = Math.max(...episodeRewards);
+            const goalCount = episodeRewards.filter(r => r >= -20).length;  // 到达终点的大致判断
+
+            // 更新回放控件
+            document.getElementById('replayEpisode').max = episodeRewards.length;
+            document.getElementById('replayInfo').textContent = `✓ 训练完成，共 ${episodeRewards.length} Episodes，可回放路径`;
+            document.getElementById('replayInfo').style.color = '#55efc4';
+            document.getElementById('replayEpisode').value=episodeRewards.length;      
+            
+            playEpisodePath();
+
+            addLog(`最终统计:`, 'highlight');
+            addLog(`  平均奖励: ${avgReward.toFixed(2)}`);
+            addLog(`  最高奖励: ${maxReward}`);
+            addLog(`  最低奖励: ${minReward}`);
+            addLog(`  成功到达终点: ${goalCount}/${episodeRewards.length} (${(goalCount/episodeRewards.length*100).toFixed(1)}%)`);
+
+            
+           
+        }
+
+        /**
+         * 评价Episode奖励等级
+         */
+        function getRewardRating(reward) {
+            if (reward >= -15) return { text: '⭐优秀', class: 'excellent' };
+            if (reward >= -30) return { text: '✓良好', class: 'good' };
+            if (reward >= -60) return { text: '○一般', class: 'normal' };
+            if (reward >= -90) return { text: '△较差', class: 'bad' };
+            return { text: '✗掉崖', class: 'terrible' };
+        }
+
+        /**
+         * 更新Episode详情表格
+         */
+        function updateEpisodeTable(data) {
+            const tbody = document.getElementById('episodeTableBody');
+            tbody.innerHTML = '';  // 清空表格
+
+            // 只显示最近的100条记录，避免表格过长
+            const startIdx = Math.max(0, data.length - 100);
+            const displayData = data.slice(startIdx);
+
+            for (const ep of displayData) {
+                const row = document.createElement('tr');
+                const rating = getRewardRating(ep.reward);
+
+                row.innerHTML = `
+                    <td class="ep-num">#${ep.episode}</td>
+                    <td class="ep-reward ${rating.class}">${ep.reward}</td>
+                    <td class="ep-epsilon">${ep.epsilon.toFixed(3)}</td>
+                    <td class="ep-rating" style="font-size: 11px;">${rating.text}</td>
+                `;
+                tbody.appendChild(row);
+            }
+
+            // 滚动到底部显示最新记录
+            const container = document.getElementById('episodeTableContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        /**
+         * 添加训练日志
+         */
+        function addLog(message, type = '') {
+            const logContainer = document.getElementById('trainingLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        /**
+         * 初始化奖励图表
+         */
+        function initRewardChart() {
+            const ctx = document.getElementById('rewardChart').getContext('2d');
+
+            if (rewardChart) {
+                rewardChart.destroy();
+            }
+
+            rewardChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Episode 奖励',
+                        data: [],
+                        borderColor: '#00d9ff',
+                        backgroundColor: 'rgba(0, 217, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        borderWidth: 1
+                    }, {
+                        label: '移动平均 (20)',
+                        data: [],
+                        borderColor: '#fdcb6e',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#888'
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Episode',
+                                color: '#888'
+                            },
+                            ticks: {
+                                color: '#888'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: '总奖励',
+                                color: '#888'
+                            },
+                            ticks: {
+                                color: '#888'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * 更新奖励图表
+         */
+        function updateRewardChart() {
+            if (!rewardChart) return;
+
+            // 降采样以提高性能（每10个取1个）
+            const sampledLabels = [];
+            const sampledRewards = [];
+
+            for (let i = 0; i < episodeRewards.length; i += 10) {
+                sampledLabels.push(i + 1);
+                sampledRewards.push(episodeRewards[i]);
+            }
+
+            // 计算移动平均
+            const windowSize = 20;
+            const movingAvg = [];
+            for (let i = 0; i < episodeRewards.length; i++) {
+                const start = Math.max(0, i - windowSize + 1);
+                const window = episodeRewards.slice(start, i + 1);
+                const avg = window.reduce((a, b) => a + b, 0) / window.length;
+                movingAvg.push(avg);
+            }
+
+            // 降采样移动平均
+            const sampledMovingAvg = [];
+            for (let i = 0; i < movingAvg.length; i += 10) {
+                sampledMovingAvg.push(movingAvg[i]);
+            }
+
+            rewardChart.data.labels = sampledLabels;
+            rewardChart.data.datasets[0].data = sampledRewards;
+            rewardChart.data.datasets[1].data = sampledMovingAvg;
+            rewardChart.update('none');
+        }
+
+        /**
+         * 开始训练（使用已生成的环境）
+         */
+        function startTraining() {
+            if (isTraining) return;
+
+            // 检查环境是否已生成
+            if (!env) {
+                addLog('⚠️ 请先点击"生成环境"创建棋盘', 'error');
+                return;
+            }
+
+            // 重置环境状态（回到起点），但保留Q-table和黑洞布局
+            env.gotoStart();
+
+            // 清空训练数据
+            episodeRewards = [];
+            episodeTrajectories = [];
+
+            // 清空图表
+            if (rewardChart) {
+                rewardChart.destroy();
+                rewardChart = null;
+            }
+            initRewardChart();
+
+            // 清空Episode详情表格
+            document.getElementById('episodeTableBody').innerHTML = '';
+
+            // 更新UI
+            render();
+            updateStats();
+            renderQTable();
+            renderVTable();
+            renderPolicyTable();
+
+            addLog(`训练开始，棋盘=${env.width}x${env.height}，黑洞数=${env.getBlackholeCount()}`, 'highlight');
+
+            // 根据选择的算法执行对应训练
+            const algo = document.getElementById('algorithmSelect').value;
+            if (algo === 'sarsa') {
+                trainSarsa();
+            } else {
+                trainQL();  // 默认 Q-Learning
+            }
+        }
+
+        /**
+         * 停止训练
+         */
+        function stopTraining() {
+            shouldStopTraining = true;
+            addLog('正在停止训练...', 'error');
+        }
+
+        /**
+         * 更新奖励显示（环境参数改变时调用）
+         */
+        function updateRewardDisplays() {
+            if (!env) return;
+
+            // 更新图例中的奖励显示
+            const normalRewardEl = document.getElementById('normalRewardDisplay2');
+            const blackholeRewardEl = document.getElementById('blackholeRewardDisplay');
+            if (normalRewardEl) normalRewardEl.textContent = env.normalReward;
+            if (blackholeRewardEl) blackholeRewardEl.textContent = env.blackholeReward;
+
+            // 更新预期奖励说明
+            const normalRewardDisplay = document.getElementById('normalRewardDisplay');
+            const goalRewardDisplay = document.getElementById('goalRewardDisplay');
+            const optimalRewardDisplay = document.getElementById('optimalRewardDisplay');
+            if (normalRewardDisplay) normalRewardDisplay.textContent = env.normalReward;
+            if (goalRewardDisplay) goalRewardDisplay.textContent = env.goalReward;
+            if (optimalRewardDisplay) {
+                // 最短路径 = (width-1) + (height-1)
+                const w = env.width;
+                const h = env.height;
+                const optimal = (w + h - 2) * env.normalReward;
+                optimalRewardDisplay.textContent = optimal;
+            }
+        }
+
+        /**
+         * 更新副标题和描述显示
+         */
+        function updateSubtitle() {
+            if (!env) return;
+            const subtitleEl = document.getElementById('subtitle');
+            if (subtitleEl) {
+                subtitleEl.textContent = `${env.width} x ${env.height} GRID WORLD | BALCKHOLE WALKING | TD(QL & SARSA) | Author: SuYun`;
+            }
+
+            // 更新综合表格描述
+            const combinedTableDesc = document.getElementById('combinedTableDesc');
+            if (combinedTableDesc) {
+                combinedTableDesc.textContent = `V(s) 状态价值 | Q(s,a) 动作价值 | π(a|s) 策略概率 | 尺寸: ${env.width}×${env.height}`;
+            }
+        }
+
+        /**
+         * 生成新环境（随机黑洞位置，可设置棋盘大小）
+         */
+        function generateNewEnvironment() {
+            if (isTraining) {
+                addLog('训练中无法生成新环境，请先停止训练', 'error');
+                return;
+            }
+
+            // 获取环境参数
+            const gridWidth = parseInt(document.getElementById('gridWidth').value) || 10;
+            const gridHeight = parseInt(document.getElementById('gridHeight').value) || 10;
+            const blackholeProb = parseFloat(document.getElementById('envBlackholeProb').value) / 100;
+            const normalReward = parseFloat(document.getElementById('envNormalReward').value);
+            const blackholeReward = parseFloat(document.getElementById('envBlackholeReward').value);
+            const goalReward = parseFloat(document.getElementById('envGoalReward').value);
+
+            // 使用当前参数创建新环境（支持不同宽高）
+            env = new GridWorld(gridWidth, gridHeight, blackholeProb, normalReward, blackholeReward, goalReward);
+
+            // 使用随机种子（基于当前时间戳）
+            const randomSeed = Date.now();
+            env.reset(randomSeed);
+
+            // 清空训练数据
+            episodeRewards = [];
+            episodeTrajectories = [];
+
+
+            // 更新UI
+            render();
+            renderQTable();
+            renderVTable();
+            renderPolicyTable();
+            updateStats();
+            document.getElementById('blackholeCount').textContent = env.getBlackholeCount();
+
+            // 清空图表
+            if (rewardChart) {
+                rewardChart.destroy();
+                rewardChart = null;
+            }
+            initRewardChart();
+
+            // 清空Episode详情表格
+            document.getElementById('episodeTableBody').innerHTML = '';
+            document.getElementById('replayInfo').textContent = '新环境已生成，请开始训练';
+            document.getElementById('replayInfo').style.color = '#888';
+
+            addLog(`新环境已生成，尺寸=${gridWidth}x${gridHeight}，种子=${randomSeed}，黑洞数=${env.getBlackholeCount()}`, 'highlight');
+
+            // 更新奖励显示
+            updateRewardDisplays();
+            updateSubtitle();
+        }
+
+        /**
+         * 重置Q表格（保留当前环境，只清空表格和轨迹）
+         */
+        function resetQTables() {
+            if (isTraining) {
+                addLog('训练中无法重置，请先停止训练', 'error');
+                return;
+            }
+
+            // 只重置表格，不重新生成环境
+            env.initializeTables();
+
+            // 清空训练数据
+            episodeRewards = [];
+            episodeTrajectories = [];
+
+            // 清除路径显示
+            clearPath();
+
+            // 更新UI - 重渲染棋盘（V值会显示为初始值0）
+            render();
+            updateStats();
+            renderQTable();
+            renderVTable();
+            renderPolicyTable();
+
+            // 清空图表
+            if (rewardChart) {
+                rewardChart.destroy();
+                rewardChart = null;
+            }
+            initRewardChart();
+
+            // 清空Episode详情表格
+            document.getElementById('episodeTableBody').innerHTML = '';
+            document.getElementById('replayInfo').textContent = '表格已重置，请重新训练';
+            document.getElementById('replayInfo').style.color = '#888';
+
+            addLog('Q-table已重置，环境保持不变', 'highlight');
+        }
+
+        /**
+         * 播放指定Episode的路径
+         */
+        function playEpisodePath() {
+            const episodeNum = parseInt(document.getElementById('replayEpisode').value);
+
+            if (episodeTrajectories.length === 0) {
+                document.getElementById('replayInfo').textContent = '⚠️ 请先训练模型';
+                document.getElementById('replayInfo').style.color = '#ff6b6b';
+                return;
+            }
+
+            if (episodeNum < 1 || episodeNum > episodeTrajectories.length) {
+                document.getElementById('replayInfo').textContent = `⚠️ Episode范围: 1 ~ ${episodeTrajectories.length}`;
+                document.getElementById('replayInfo').style.color = '#ff6b6b';
+                return;
+            }
+
+            const trajectory = episodeTrajectories[episodeNum - 1];
+            highlightPath(trajectory);
+
+            const infoEl = document.getElementById('replayInfo');
+            const reward = episodeRewards[episodeNum - 1];
+            const steps = trajectory.length - 1;
+            infoEl.textContent = `Episode #${episodeNum}: 奖励=${reward}, 步数=${steps}`;
+            infoEl.style.color = '#55efc4';
+        }
+
+        /**
+         * 清除路径高亮
+         */
+        function clearPath() {
+            // 移除SVG路径层
+            const pathLayer = document.getElementById('pathLayer');
+            if (pathLayer) {
+                pathLayer.remove();
+            }
+
+            document.getElementById('replayInfo').textContent = '路径已清除';
+            document.getElementById('replayInfo').style.color = '#888';
+        }
+
+        /**
+         * 在棋盘上高亮显示路径（简洁淡色版本）
+         * @param {Array} trajectory - 轨迹数组 [{x, y}, ...]
+         */
+        function highlightPath(trajectory) {
+            // 先清除之前的路径
+            clearPath();
+
+            if (!trajectory || trajectory.length < 2) return;
+            if (!cells || cells.length === 0) return;
+
+            // 获取网格元素
+            const grid = document.getElementById('grid');
+            const gridWidth = grid.offsetWidth;
+            const gridHeight = grid.offsetHeight;
+            const firstCell = cells[0];
+            const cellWidth = firstCell.offsetWidth;
+            const cellHeight = firstCell.offsetHeight;
+            const gap = 0;  // 新版CSS中gap为0
+            const style = window.getComputedStyle(grid);
+            const paddingLeft = parseFloat(style.paddingLeft);
+            const paddingTop = parseFloat(style.paddingTop);
+
+            // 创建路径SVG层
+            let pathLayer = document.getElementById('pathLayer');
+            if (!pathLayer) {
+                pathLayer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                pathLayer.id = 'pathLayer';
+                pathLayer.setAttribute('width', gridWidth);
+                pathLayer.setAttribute('height', gridHeight);
+                pathLayer.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    pointer-events: none;
+                    z-index: 5;
+                    overflow: visible;
+                `;
+                grid.insertBefore(pathLayer, grid.firstChild);
+            } else {
+                pathLayer.setAttribute('width', gridWidth);
+                pathLayer.setAttribute('height', gridHeight);
+                pathLayer.innerHTML = '';
+            }
+
+            // 计算路径点中心坐标
+            const pathPoints = trajectory.map((pos) => {
+                return {
+                    x: paddingLeft + pos.x * (cellWidth + gap) + cellWidth / 2,
+                    y: paddingTop + pos.y * (cellHeight + gap) + cellHeight / 2
+                };
+            });
+
+            // 淡色路径配置
+            const pathColor = 'rgba(0, 217, 255, 0.35)';  // 淡青色
+            const pathWidth = 4;
+
+            // 绘制路径连线
+            if (pathPoints.length > 1) {
+                const linePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+                let d = `M ${pathPoints[0].x} ${pathPoints[0].y}`;
+                for (let i = 1; i < pathPoints.length; i++) {
+                    d += ` L ${pathPoints[i].x} ${pathPoints[i].y}`;
+                }
+
+                // 淡色路径线
+                linePath.setAttribute('d', d);
+                linePath.setAttribute('stroke', pathColor);
+                linePath.setAttribute('stroke-width', pathWidth);
+                linePath.setAttribute('fill', 'none');
+                linePath.setAttribute('stroke-linecap', 'round');
+                linePath.setAttribute('stroke-linejoin', 'round');
+                pathLayer.appendChild(linePath);
+
+                // 起点和终点标记（淡色小圆点）
+                const startCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                startCircle.setAttribute('cx', pathPoints[0].x);
+                startCircle.setAttribute('cy', pathPoints[0].y);
+                startCircle.setAttribute('r', '6');
+                startCircle.setAttribute('fill', 'rgba(0, 255, 136, 0.5)');
+                startCircle.setAttribute('stroke', 'rgba(0, 255, 136, 0.8)');
+                startCircle.setAttribute('stroke-width', '2');
+                pathLayer.appendChild(startCircle);
+
+                const endCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                endCircle.setAttribute('cx', pathPoints[pathPoints.length - 1].x);
+                endCircle.setAttribute('cy', pathPoints[pathPoints.length - 1].y);
+                endCircle.setAttribute('r', '6');
+                endCircle.setAttribute('fill', 'rgba(255, 107, 107, 0.5)');
+                endCircle.setAttribute('stroke', 'rgba(255, 107, 107, 0.8)');
+                endCircle.setAttribute('stroke-width', '2');
+                pathLayer.appendChild(endCircle);
+            }
+        }
+
+
+        // ========== 初始化 ==========
+
+        function init() {
+            // 页面加载时创建默认环境（不生成黑洞）
+            const gridWidth = parseInt(document.getElementById('gridWidth')?.value) || 10;
+            const gridHeight = parseInt(document.getElementById('gridHeight')?.value) || 10;
+            const blackholeProb = parseFloat(document.getElementById('envBlackholeProb')?.value || 5) / 100;
+            const normalReward = parseFloat(document.getElementById('envNormalReward')?.value || -1);
+            const blackholeReward = parseFloat(document.getElementById('envBlackholeReward')?.value || -100);
+            const goalReward = parseFloat(document.getElementById('envGoalReward')?.value || 0);
+            env = new GridWorld(gridWidth, gridHeight, blackholeProb, normalReward, blackholeReward, goalReward);
+            // 不调用 reset()，保持环境为空状态（无黑洞）
+            render();
+            updateStats();
+            updateRewardDisplays();
+            updateSubtitle();
+            renderQTable();
+            renderVTable();
+            renderPolicyTable();
+
+            // 更新回放提示
+            document.getElementById('replayInfo').textContent = '请先点击"生成环境"创建棋盘和黑洞';
+            document.getElementById('replayInfo').style.color = '#fdcb6e';
+        }
+
+        // ========== 棋盘格子悬停气泡框 ==========
+
+        const TOOLTIP_ACTION_NAMES  = ['↑ 上', '↓ 下', '← 左', '→ 右'];
+        const TOOLTIP_ACTION_COLORS = ['#00b894', '#0984e3', '#e17055', '#6c5ce7'];
+
+        function getTooltipEl() {
+            return document.getElementById('cellTooltip');
+        }
+
+        function showCellTooltip(event, x, y) {
+            if (!env) return;
+            const tip = getTooltipEl();
+            if (!tip) return;
+
+            const cellType = env.getCellType(x, y);
+            const vValue   = env.getVValue(x, y);
+            const qVals    = env.getQValues(x, y);
+            const maxQ     = Math.max(...qVals);
+
+            const typeMap = {
+                'NORMAL': ['普通格子', 'type-normal'],
+                'START':  ['起点 S',   'type-start'],
+                'GOAL':   ['终点 G',   'type-goal'],
+                'BLACKHOLE':  ['黑洞 X',   'type-blackhole'],
+            };
+            const [typeText, typeClass] = typeMap[cellType] || ['未知', 'type-normal'];
+
+            // 只有黑洞不显示 V/Q 值；起点和终点也需要显示
+            const isCliff = (cellType === 'BLACKHOLE');
+            const vStr = isCliff ? '—' : parseFloat(vValue.toPrecision(7)).toString();
+
+            let qRows = '';
+            for (let a = 0; a < 4; a++) {
+                const qStr  = isCliff ? '—' : parseFloat(qVals[a].toPrecision(7)).toString();
+                const isMax = !isCliff && (qVals[a] === maxQ);
+                qRows += `<div class="tooltip-q-item${isMax ? ' max-action' : ''}" style="border-left-color:${TOOLTIP_ACTION_COLORS[a]}">
+                    <span class="tooltip-q-label" style="color:${TOOLTIP_ACTION_COLORS[a]}">${TOOLTIP_ACTION_NAMES[a]}</span>
+                    <span class="tooltip-q-value" style="color:${isMax ? '#55efc4' : '#aaa'}">${qStr}</span>
+                </div>`;
+            }
+
+            tip.innerHTML = `
+                <div class="tooltip-pos">位置 (${x}, ${y})</div>
+                <span class="tooltip-type ${typeClass}">${typeText}</span>
+                <div class="tooltip-v">
+                    <span class="tooltip-v-label">V(s) 状态价值</span>
+                    <span class="tooltip-v-value">${vStr}</span>
+                </div>
+                <div class="tooltip-q-grid">${qRows}</div>`;
+
+            tip.style.display = 'block';
+            moveCellTooltip(event);
+        }
+
+        function moveCellTooltip(event) {
+            const tip = getTooltipEl();
+            if (!tip || tip.style.display === 'none') return;
+            const margin = 16;
+            const tw = tip.offsetWidth  || 240;
+            const th = tip.offsetHeight || 180;
+            let left = event.clientX + margin;
+            let top  = event.clientY + margin;
+            if (left + tw > window.innerWidth  - 8) left = event.clientX - tw - margin;
+            if (top  + th > window.innerHeight - 8) top  = event.clientY - th - margin;
+            tip.style.left = left + 'px';
+            tip.style.top  = top  + 'px';
+        }
+
+        function hideCellTooltip() {
+            const tip = getTooltipEl();
+            if (tip) tip.style.display = 'none';
+        }
+
+        // 事件委托：绑定在 #grid 容器上，格子重建后依然有效
+        function initTooltipEvents() {
+            const gridEl = document.getElementById('grid');
+            if (!gridEl) return;
+
+            gridEl.addEventListener('mousemove', function(e) {
+                const cell = e.target.closest('.cell');
+                if (!cell) { hideCellTooltip(); return; }
+                const x = parseInt(cell.dataset.gx);
+                const y = parseInt(cell.dataset.gy);
+                if (isNaN(x) || isNaN(y)) { hideCellTooltip(); return; }
+                // 如果已经在显示同一个格子，只更新位置
+                if (tip_currentX === x && tip_currentY === y) {
+                    moveCellTooltip(e);
+                } else {
+                    tip_currentX = x;
+                    tip_currentY = y;
+                    showCellTooltip(e, x, y);
+                }
+            });
+
+            gridEl.addEventListener('mouseleave', function() {
+                tip_currentX = -1;
+                tip_currentY = -1;
+                hideCellTooltip();
+            });
+        }
+
+        let tip_currentX = -1, tip_currentY = -1;
+
+        // 页面加载完毕后绑定一次即可
+        document.addEventListener('DOMContentLoaded', initTooltipEvents);
+
+        // ========== 渲染 ==========
+
+        function render() {
+            const gridEl = document.getElementById('grid');
+            gridEl.innerHTML = '';
+            gridEl.style.gridTemplateColumns = `repeat(${env.width}, 50px)`;
+            cells = [];  // 重置cells数组
+
+            for (let y = 0; y < env.height; y++) {
+                for (let x = 0; x < env.width; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+
+                    const isAgent = x === env.agentPos.x && y === env.agentPos.y;
+                    const cellType = env.getCellType(x, y);
+
+                    if (isAgent) {
+                        if (cellType === 'BLACKHOLE') {
+                            cell.classList.add('cell-agent-on-blackhole');
+                        } else if (cellType === 'GOAL') {
+                            cell.classList.add('cell-agent-on-goal');
+                        } else {
+                            cell.classList.add('cell-agent');
+                        }
+                        cell.textContent = 'A';
+                    } else {
+                        switch (cellType) {
+                            case 'START':
+                                cell.classList.add('cell-start');
+                                // 起点显示字母 + V 值
+                                {
+                                    const v = env.getVValue(x, y);
+                                    cell.innerHTML = `<span style="font-size:12px;font-weight:bold">S</span><br><span style="font-size:10px;color:rgba(255,255,255,0.8)">${v.toFixed(0)}</span>`;
+                                }
+                                break;
+                            case 'GOAL':
+                                cell.classList.add('cell-goal');
+                                // 终点显示字母 + V 值
+                                {
+                                    const v = env.getVValue(x, y);
+                                    cell.innerHTML = `<span style="font-size:12px;font-weight:bold">G</span><br><span style="font-size:10px;color:rgba(255,255,255,0.8)">${v.toFixed(0)}</span>`;
+                                }
+                                break;
+                            case 'BLACKHOLE':
+                                cell.classList.add('cell-blackhole');
+                                cell.textContent = 'X';
+                                break;
+                            default:
+                                // 普通格子显示V值（状态价值）
+                                cell.classList.add('cell-normal');
+                                const vValue = env.getVValue(x, y);
+                                cell.textContent = vValue.toFixed(0);
+                                break;
+                        }
+                    }
+
+                    // 存储坐标，供事件委托使用
+                    cell.dataset.gx = x;
+                    cell.dataset.gy = y;
+
+                    gridEl.appendChild(cell);
+                    cells.push(cell);  // 添加到cells数组
+                }
+            }
+        }
+
+        function updateStats() {
+            const pos = env.getState();
+            document.getElementById('position').textContent = `(${pos.x}, ${pos.y})`;
+            document.getElementById('steps').textContent = env.totalSteps;
+            document.getElementById('reward').textContent = env.totalReward;
+
+            let status = '运行中';
+            let statusClass = '';
+            if (env.terminated) {
+                const cellType = env.getCellType(pos.x, pos.y);
+                if (cellType === 'BLACKHOLE') {
+                    status = '踩到黑洞!';
+                    statusClass = 'terminated';
+                } else if (cellType === 'GOAL') {
+                    status = '到达终点!';
+                    statusClass = 'terminated';
+                }
+            }
+            document.getElementById('status').textContent = status;
+            document.getElementById('status').className = `stat-value ${statusClass}`;
+        }
+
+        // ========== 表格可视化 ==========
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        /**
+         * 渲染综合表格 - 合并 V-Table、Q-Table、Policy-Table
+         */
+        function renderCombinedTable() {
+            const grid = document.getElementById('combinedTableGrid');
+            if (!grid) return;
+            
+            // 使用表格形式，每个状态一个行组
+            // 格式: 位置 | V(s) | Q0 Q1 Q2 Q3 | π0 π1 π2 π3
+            const colors = ['#00b894', '#0984e3', '#e17055', '#6c5ce7'];
+            const actionNames = ['↑', '↓', '←', '→'];
+            
+            let html = '<div class="combined-table-container"><table class="combined-table">';
+            
+            // 表头
+            html += '<thead><tr>';
+            html += '<th class="action-col">位置</th>';
+            html += '<th>V(s)</th>';
+            for (let a = 0; a < 4; a++) {
+                html += `<th class="action-col" style="color: ${colors[a]}">Q${a}(${actionNames[a]})</th>`;
+            }
+            for (let a = 0; a < 4; a++) {
+                html += `<th class="action-col" style="color: ${colors[a]}">π${a}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+            
+            // 遍历所有状态
+            for (let y = 0; y < env.height; y++) {
+                for (let x = 0; x < env.width; x++) {
+                    const cellType = env.getCellType(x, y);
+                    const isAgent = x === env.agentPos.x && y === env.agentPos.y;
+                    const vValue = env.getVValue(x, y);
+                    const qVals = env.getQValues(x, y);
+                    const pVals = env.getPolicyValues(x, y);
+                    
+                    // 找到最大Q值和最大策略概率
+                    const maxQ = Math.max(...qVals);
+                    const maxP = Math.max(...pVals);
+                    
+                    // 行样式
+                    let rowClass = '';
+                    let cellDisplay = '';
+                    
+                    if (cellType === 'BLACKHOLE') {
+                        rowClass = 'cell-blackhole-row';
+                        cellDisplay = 'X';
+                    } else if (cellType === 'GOAL') {
+                        rowClass = 'cell-goal-row';
+                        cellDisplay = 'G';
+                    } else if (cellType === 'START') {
+                        rowClass = 'cell-start-row';
+                        cellDisplay = 'S';
+                    }
+                    
+                    html += `<tr class="${rowClass}">`;
+                    
+                    // 位置
+                    const posClass = isAgent ? 'agent-highlight' : '';
+                    html += `<td class="state-cell ${posClass}">(${x},${y})</td>`;
+                    
+                    // V值（黑洞显示 X，其他都显示数值）
+                    html += `<td class="v-cell ${posClass}">${cellType === 'BLACKHOLE' ? cellDisplay : vValue.toFixed(0)}</td>`;
+
+                    // Q值
+                    for (let a = 0; a < 4; a++) {
+                        const isMaxQ = qVals[a] === maxQ && maxQ !== 0;
+                        const qClass = isMaxQ ? 'max-q' : '';
+                        const cellClass = cellType === 'BLACKHOLE' ? '' : qClass;
+                        html += `<td class="q-cell ${cellClass} ${posClass}" style="color: ${colors[a]}">${cellType === 'BLACKHOLE' ? '-' : qVals[a].toFixed(1)}</td>`;
+                    }
+
+                    // 策略概率
+                    for (let a = 0; a < 4; a++) {
+                        const isMaxP = pVals[a] === maxP && maxP !== 0;
+                        const pClass = isMaxP ? 'max-p' : '';
+                        const cellClass = cellType === 'BLACKHOLE' ? '' : pClass;
+                        html += `<td class="p-cell ${cellClass} ${posClass}" style="color: ${colors[a]}">${cellType === 'BLACKHOLE' ? '-' : (pVals[a] * 100).toFixed(0) + '%'}</td>`;
+                    }
+                    
+                    html += '</tr>';
+                }
+            }
+            
+            html += '</tbody></table></div>';
+            grid.innerHTML = html;
+        }
+
+        // 保留旧函数作为别名以兼容
+        function renderQTable() { renderCombinedTable(); }
+        function renderVTable() { renderCombinedTable(); }
+        function renderPolicyTable() { renderCombinedTable(); }
+
+
+
+        // ========== UI ==========
+
+        function showMessage(title, text) {
+            document.getElementById('messageTitle').textContent = title;
+            document.getElementById('messageText').textContent = text;
+            document.getElementById('message').classList.add('show');
+        }
+
+        function closeMessage() {
+            document.getElementById('message').classList.remove('show');
+        }
+
+        /**
+         * 重新初始化环境（保留Q-table）
+         */
+        function reset() {
+            const blackholeProb = parseFloat(document.getElementById('trainingBlackholeProb').value) / 100;
+            env = new GridWorld(10, 10, blackholeProb);
+            env.reset();
+            render();
+            updateStats();
+            closeMessage();
+        }
+
+        // ========== 启动 ==========
+
+        init();
+    </script>
+</body>
+</html>
