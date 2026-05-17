@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CartPole DQN</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 960px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            color: #00d9ff;
+            margin-bottom: 8px;
+            font-size: 2rem;
+            text-shadow: 0 0 20px rgba(0,217,255,0.5);
+        }
+        .subtitle { text-align: center; color: #888; margin-bottom: 24px; font-size: 13px; }
+
+        /* ===== 通用按钮 ===== */
+        button { padding: 10px 22px; font-size: 14px; border: none; border-radius: 8px; cursor: pointer; transition: all .3s; font-weight: 600; }
+        .btn-primary  { background: linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+        .btn-danger   { background: linear-gradient(135deg,#f093fb,#f5576c); color:#fff; }
+        .btn-success  { background: linear-gradient(135deg,#11998e,#38ef7d); color:#fff; }
+        .btn-warning  { background: linear-gradient(135deg,#fdcb6e,#e17055); color:#fff; }
+        button:hover  { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(255,255,255,.15); }
+        .controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:14px 0; }
+
+        /* ===== 面板 ===== */
+        .panel {
+            background: rgba(255,255,255,.05);
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin: 16px 0;
+            border: 1px solid rgba(255,255,255,.07);
+        }
+        .panel-title {
+            color: #00d9ff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+            font-weight: 700;
+        }
+
+        /* ===== 参数网格 ===== */
+        .params-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; margin-bottom:14px; }
+        .param-item { background: rgba(255,255,255,.05); padding: 10px 12px; border-radius: 8px; }
+        .param-label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing:.8px; margin-bottom: 5px; }
+        .param-input {
+            width: 100%; padding: 6px 10px;
+            border: 1px solid #4a5568; border-radius: 6px;
+            background: #1a202c; color: #fff; font-size: 14px;
+        }
+        .param-select {
+            width: 100%; padding: 7px 10px;
+            border: 1px solid #4a5568; border-radius: 6px;
+            background: #1a202c; color: #55efc4; font-size: 14px; cursor: pointer;
+        }
+
+        /* ===== CartPole Canvas ===== */
+        #cartpoleCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #0d1117;
+            border-radius: 10px;
+            border: 1px solid rgba(0,217,255,.25);
+        }
+
+        /* ===== 状态统计 ===== */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px,1fr));
+            gap: 10px;
+            margin: 12px 0;
+        }
+        .stat-card { background: rgba(255,255,255,.05); border-radius: 10px; padding: 14px; text-align: center; border: 1px solid rgba(255,255,255,.08); }
+        .stat-label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing:.8px; margin-bottom: 4px; }
+        .stat-value { font-size: 22px; font-weight: bold; color: #00d9ff; }
+        .stat-value.good { color: #55efc4; }
+        .stat-value.warn { color: #fdcb6e; }
+        .stat-value.bad  { color: #ff7675; }
+
+        /* ===== 进度条 ===== */
+        .progress-bar { width:100%; height:7px; background:rgba(255,255,255,.1); border-radius:4px; overflow:hidden; margin: 8px 0; }
+        .progress-fill { height:100%; background:linear-gradient(90deg,#667eea,#764ba2); transition:width .3s; width:0%; }
+
+        /* ===== 图表 ===== */
+        .chart-container { background:rgba(255,255,255,.05); border-radius:12px; padding:18px; margin:16px 0; }
+        .chart-title { color:#00d9ff; font-size:15px; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; }
+        .chart-wrapper { position:relative; height:280px; }
+
+        /* ===== 训练统计小格 ===== */
+        .training-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; margin-top:12px; }
+        .training-stat { background:rgba(255,255,255,.05); padding:9px; border-radius:6px; text-align:center; }
+        .training-stat-label { color:#888; font-size:10px; text-transform:uppercase; }
+        .training-stat-value { color:#55efc4; font-size:15px; font-weight:bold; margin-top:2px; }
+
+        /* ===== 回放控件 ===== */
+        .replay-controls {
+            background: linear-gradient(135deg,rgba(253,121,168,.1),rgba(253,203,110,.1));
+            border: 1px solid rgba(253,121,168,.3);
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin: 10px 0;
+        }
+        .replay-title { color:#fdcb6e; font-size:13px; font-weight:600; margin-bottom:8px; }
+        .replay-input-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .replay-input-group label { color:#aaa; font-size:12px; }
+        .replay-input {
+            width:90px; padding:5px 10px;
+            background:rgba(0,0,0,.3); border:1px solid rgba(253,121,168,.4);
+            border-radius:6px; color:#fff; font-size:13px; text-align:center;
+        }
+        .btn-replay {
+            padding:6px 14px;
+            background:linear-gradient(135deg,#fd79a8,#fdcb6e);
+            border:none; border-radius:6px;
+            color:#1a1a2e; font-size:12px; font-weight:600; cursor:pointer;
+        }
+        .btn-replay:hover { transform:translateY(-2px); box-shadow:0 4px 14px rgba(253,121,168,.4); }
+        .btn-clear { padding:6px 12px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:6px; color:#888; font-size:12px; cursor:pointer; }
+        .btn-clear:hover { background:rgba(255,107,107,.2); color:#ff6b6b; }
+        .replay-info { margin-top:6px; font-size:11px; color:#666; }
+
+        /* ===== Episode 详情表 ===== */
+        .episode-table-container { max-height:230px; overflow-y:auto; background:rgba(0,0,0,.3); border-radius:8px; margin-top:12px; }
+        .episode-table { width:100%; border-collapse:collapse; font-family:'Consolas',monospace; font-size:12px; }
+        .episode-table th { background:rgba(0,217,255,.2); color:#00d9ff; padding:7px 6px; text-align:center; position:sticky; top:0; z-index:1; }
+        .episode-table td { padding:4px 6px; text-align:center; border-bottom:1px solid rgba(255,255,255,.05); }
+        .episode-table tr:nth-child(even) { background:rgba(255,255,255,.02); }
+        .episode-table tr:hover { background:rgba(0,217,255,.08); }
+        .ep-reward.excellent { color:#00ff88; }
+        .ep-reward.good      { color:#55efc4; }
+        .ep-reward.normal    { color:#ffeaa7; }
+        .ep-reward.bad       { color:#ff7675; }
+        .ep-reward.terrible  { color:#d63031; }
+        .ep-epsilon  { color:#a29bfe; }
+        .ep-steps    { color:#74b9ff; }
+
+        /* ===== 日志 ===== */
+        .log-container { max-height:180px; overflow-y:auto; background:rgba(0,0,0,.3); border-radius:8px; padding:10px; font-family:'Consolas',monospace; font-size:12px; margin-top:12px; }
+        .log-entry { color:#888; margin:2px 0; }
+        .log-entry.highlight { color:#55efc4; }
+        .log-entry.error { color:#ff7675; }
+
+        /* ===== Q值查询 ===== */
+        .qquery-result { margin-top: 12px; padding: 12px; background:rgba(0,0,0,.2); border-radius:8px; font-family:'Consolas',monospace; font-size:13px; }
+        .qquery-row { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+        .qquery-row:last-child { border:none; }
+        .qquery-label { color:#74b9ff; }
+        .qquery-val   { color:#55efc4; font-weight:bold; }
+        .qquery-val.best { color:#fdcb6e; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🤖 CartPole Dueling DQN</h1>
+    <p class="subtitle">CARTPOLE BALANCE | Dueling DQN (Dyna-Q + QNet) | 3-Layer MLP + ELU | V/A 分流输出 | Author: SuYun</p>
+
+    <!-- ===== 训练超参数 ===== -->
+    <div class="panel">
+        <div class="panel-title">⚙️ 训练超参数配置</div>
+        <div class="params-grid">
+            <div class="param-item">
+                <div class="param-label">算法模式</div>
+                <select class="param-select" id="algoMode" style="display:none">
+                    <option value="double" selected>双网络（行为+目标）</option>
+                </select>
+                <span style="color:#55efc4;font-size:13px;">双网络（行为+目标）</span>
+            </div>
+            <div class="param-item">
+                <div class="param-label">Episode 数量</div>
+                <input type="number" class="param-input" id="numEpisodes" value="1000" min="10" max="5000" step="50">
+            </div>
+            <div class="param-item">
+                <div class="param-label">经验回放池 N</div>
+                <input type="number" class="param-input" id="replayN" value="32" min="0" max="256" step="8">
+            </div>
+            <div class="param-item">
+                <div class="param-label">回放池容量</div>
+                <input type="number" class="param-input" id="bufferSize" value="2000" min="100" max="100000" step="500">
+            </div>
+            <div class="param-item">
+                <div class="param-label">Q 值日志采样频率</div>
+                <input type="number" class="param-input" id="qLogSample" value="200" min="1" max="10000" step="50" title="每 N 次更新记录一次 Q 值；设为 0 则不记录">
+            </div>
+            <div class="param-item">
+                <div class="param-label">目标网络同步步数</div>
+                <input type="number" class="param-input" id="targetSyncSteps" value="200" min="10" max="10000" step="50" title="每 N 步环境交互后同步目标网络（仅双网络模式）">
+            </div>
+            <div class="param-item">
+                <div class="param-label">最大步数/Episode</div>
+                <input type="number" class="param-input" id="maxSteps" value="200" min="50" max="5000" step="50">
+            </div>
+            <div class="param-item">
+                <div class="param-label">学习率 α</div>
+                <input type="number" class="param-input" id="alpha" value="0.0005" min="0.00001" max="0.1" step="0.0005">
+            </div>
+            <div class="param-item">
+                <div class="param-label">折扣因子 γ</div>
+                <input type="number" class="param-input" id="gamma" value="0.99" min="0.8" max="1.0" step="0.01">
+            </div>
+            <div class="param-item">
+                <div class="param-label">ε 初始值</div>
+                <input type="number" class="param-input" id="epsilonStart" value="1.0" min="0" max="1" step="0.05">
+            </div>
+            <div class="param-item">
+                <div class="param-label">ε 最终值</div>
+                <input type="number" class="param-input" id="epsilonEnd" value="0.05" min="0" max="1" step="0.01">
+            </div>
+            <div class="param-item">
+                <div class="param-label">ε 衰减率</div>
+                <input type="number" class="param-input" id="epsilonDecay" value="0.98" min="0.9" max="1" step="0.001">
+            </div>
+            <div class="param-item">
+                <div class="param-label">帧率 FPS（物理）</div>
+                <input type="number" class="param-input" id="simFPS" value="50" min="10" max="200" step="10">
+            </div>
+            <div class="param-item">
+                <div class="param-label">杆角度范围 (°)</div>
+                <input type="number" class="param-input" id="thetaLimit" value="40" min="5" max="90" step="5" title="杆偏转角度超过此值则 Episode 结束">
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn-primary"  onclick="startTraining()">▶ 开始训练</button>
+            <button class="btn-danger"   onclick="stopTraining()">■ 停止训练</button>
+            <button class="btn-success"  onclick="resetAll()">↺ 重置</button>
+        </div>
+    </div>
+
+    <!-- ===== CartPole 可视化 ===== -->
+    <div class="panel">
+        <div class="panel-title">🎮 CartPole 模拟</div>
+        <canvas id="cartpoleCanvas" width="700" height="220"></canvas>
+
+        <!-- 进度 -->
+        <div class="progress-bar"><div class="progress-fill" id="trainingProgress"></div></div>
+
+        <!-- 状态统计 -->
+        <div class="stats-row">
+            <div class="stat-card"><div class="stat-label">当前 Episode</div><div class="stat-value" id="curEpisode">0</div></div>
+            <div class="stat-card"><div class="stat-label">总 Episodes</div><div class="stat-value" id="totEpisodes">500</div></div>
+            <div class="stat-card"><div class="stat-label">探索率 ε</div><div class="stat-value good" id="curEpsilon">-</div></div>
+            <div class="stat-card"><div class="stat-label">最近 Return</div><div class="stat-value warn" id="recentReturn">-</div></div>
+            <div class="stat-card"><div class="stat-label">平均 Return</div><div class="stat-value" id="avgReturn">-</div></div>
+            <div class="stat-card"><div class="stat-label">最高 Return</div><div class="stat-value good" id="bestReturn">-</div></div>
+        </div>
+
+        <!-- 回放控件 -->
+        <div class="replay-controls">
+            <div class="replay-title">🎬 Episode 回放</div>
+            <div class="replay-input-group">
+                <label>Episode #</label>
+                <input type="number" id="replayEpisode" class="replay-input" value="1" min="1" max="500">
+                <label>播放速度</label>
+                <input type="number" id="replaySpeed" class="replay-input" value="10" min="1" max="120" title="帧/秒">
+                <span style="color:#666;font-size:12px">帧/秒</span>
+                <button class="btn-replay" onclick="startReplay()">▶ 播放</button>
+                <button class="btn-clear"  onclick="stopReplay()">■ 停止</button>
+            </div>
+            <div class="replay-info" id="replayInfo">训练完成后可回放</div>
+        </div>
+
+        <!-- Episode 详情表 -->
+        <div class="episode-table-container" id="episodeTableContainer" style="display:none;">
+            <table class="episode-table">
+                <thead>
+                    <tr>
+                        <th>Episode</th>
+                        <th>Return (步数)</th>
+                        <th>ε</th>
+                        <th>评价</th>
+                    </tr>
+                </thead>
+                <tbody id="episodeTableBody"></tbody>
+            </table>
+        </div>
+        <div class="log-container" id="trainingLog"></div>
+    </div>
+
+    <!-- ===== 奖励曲线 ===== -->
+    <div class="chart-container">
+        <div class="chart-title">📈 Episode Return 曲线</div>
+        <div class="chart-wrapper"><canvas id="returnChart"></canvas></div>
+    </div>
+
+    <!-- ===== Q值更新日志 ===== -->
+    <div class="panel">
+        <div class="panel-title">📋 Q 值更新日志</div>
+        <p style="color:#888;font-size:12px;margin-bottom:10px;">每次网络更新的行为策略 Q 值与状态价值 V（更新前），显示最新 200 条。训练结束后可导出为 CSV。</p>
+        <div class="controls" style="margin-bottom:10px;">
+            <button class="btn-success" onclick="exportQLogCSV()">⬇ 导出日志 CSV</button>
+        </div>
+        <div style="overflow-x:auto;max-height:320px;overflow-y:auto;">
+            <table class="episode-table" id="qLogTable">
+                <thead>
+                    <tr>
+                        <th>Episode</th>
+                        <th>Step</th>
+                        <th>类型</th>
+                        <th>动作</th>
+                        <th>行为V</th>
+                        <th>行为Q(左)</th>
+                        <th>行为Q(右)</th>
+                        <th>目标V</th>
+                        <th>目标Q(左)</th>
+                        <th>目标Q(右)</th>
+                    </tr>
+                </thead>
+                <tbody id="qLogTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ===== Q值查询 ===== -->
+    <div class="panel">
+        <div class="panel-title">🔬 目标网络 Q 值查询（Dueling DQN）</div>
+        <p style="color:#888;font-size:12px;margin-bottom:12px;">输入四维状态，查询目标网络的 V（状态价值）、A（优势函数）、Q（动作价值）</p>
+        <div class="params-grid">
+            <div class="param-item">
+                <div class="param-label">位置 p (m)</div>
+                <input type="number" class="param-input" id="qp" value="0" step="0.1">
+            </div>
+            <div class="param-item">
+                <div class="param-label">速度 v (m/帧)</div>
+                <input type="number" class="param-input" id="qv" value="0" step="0.01">
+            </div>
+            <div class="param-item">
+                <div class="param-label">角度 a (°)</div>
+                <input type="number" class="param-input" id="qa" value="0" step="1">
+            </div>
+            <div class="param-item">
+                <div class="param-label">角速度 w (°/帧)</div>
+                <input type="number" class="param-input" id="qw" value="0" step="0.5">
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn-primary" onclick="queryQValue()">🔍 查询 Q 值</button>
+        </div>
+        <div class="qquery-result" id="qqResult" style="display:none;"></div>
+    </div>
+
+    <!-- ===== 模型管理 ===== -->
+    <div class="panel">
+        <div class="panel-title">💾 模型管理（TensorFlow.js 格式）</div>
+        <p style="color:#888;font-size:12px;margin-bottom:12px;">
+            将训练好的最终网络导出为 TF.js Functional 格式（.json + .weights.bin），包含 V/A 双分支结构。可加载到 tf.js 项目中做推理；也支持从 TF.js 格式导入权重继续训练。
+        </p>
+        <div class="controls">
+            <button class="btn-primary"  onclick="exportTFJS()">⬇ 导出 TF.js 格式</button>
+            <button class="btn-warning"  onclick="document.getElementById('tfjsJsonInput').click()">⬆ 导入 TF.js 格式</button>
+        </div>
+        <p style="color:#666;font-size:11px;margin-top:8px;" id="tfjsStatus"></p>
+        <!-- 隐藏的文件输入 -->
+        <input type="file" id="tfjsJsonInput" accept=".json" style="display:none" onchange="onTFJSJsonSelected(event)">
+        <input type="file" id="tfjsBinInput"  accept=".bin" style="display:none" onchange="onTFJSBinSelected(event)">
+    </div>
+
+</div><!-- end container -->
+
+<script>
+// ================================================================
+//  CartPole 物理环境
+// ================================================================
+class CartPoleEnv {
+    constructor(fps = 50, thetaLimitDeg = 40) {
+        this.fps      = fps;
+        this.dt       = 1 / fps;       // 秒/帧
+        this.gravity  = 9.8;           // m/s²
+        this.massCart = 1.0;           // kg
+        this.massPole = 0.1;           // kg
+        this.poleLen  = 0.5;           // 半长 m（全长1m）
+        this.forceMag = 10.0;          // N
+        // 边界
+        this.xLimit       = 2.4;                // m
+        this.thetaLimitDeg = thetaLimitDeg;      // 角度边界（度）
+        this.thetaLimit    = thetaLimitDeg * Math.PI / 180;  // → rad
+
+        this.state = null;   // [p, v, a_rad, w_rad]
+        this.done  = false;
+        this.steps = 0;
+    }
+
+    reset() {
+        // 均匀随机初始状态
+        const rand = () => (Math.random() * 2 - 1) * 0.05;
+        this.state = [rand(), rand(), rand(), rand()];
+        this.done  = false;
+        this.steps = 0;
+        return [...this.state];
+    }
+
+    step(action) {
+        // action: 0=左(-force), 1=右(+force)
+        if (this.done) return { state: [...this.state], reward: 0, done: true };
+
+        const [x, xDot, theta, thetaDot] = this.state;
+        const force = action === 1 ? this.forceMag : -this.forceMag;
+
+        const m  = this.massPole;
+        const M  = this.massCart;
+        const l  = this.poleLen;
+        const g  = this.gravity;
+        const dt = this.dt;
+
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+        const total_mass = M + m;
+
+        // 精确 CartPole 方程
+        const temp = (force + m * l * thetaDot * thetaDot * sinT) / total_mass;
+        const thetaAcc = (g * sinT - cosT * temp) /
+            (l * (4/3 - m * cosT * cosT / total_mass));
+        const xAcc = temp - m * l * thetaAcc * cosT / total_mass;
+
+        const newX      = x      + dt * xDot;
+        const newXDot   = xDot   + dt * xAcc;
+        const newTheta  = theta  + dt * thetaDot;
+        const newThetaDot = thetaDot + dt * thetaAcc;
+
+        this.state = [newX, newXDot, newTheta, newThetaDot];
+        this.steps++;
+
+        // 判断终止
+        const terminated =
+            Math.abs(newX)     > this.xLimit ||
+            Math.abs(newTheta) > this.thetaLimit;
+
+        if (terminated) {
+            this.done = true;
+            return { state: [...this.state], reward: 0, done: true };
+        }
+
+        // 每存活 1 帧得 1 分
+        const reward = 1.0;
+        return { state: [...this.state], reward, done: false };
+    }
+
+    // 将状态归一化到大约[-1,1]
+    static normalize(s) {
+        return [
+            s[0] / 2.4,
+            s[1] / 3.0,
+            s[2] / env.thetaLimit,
+            s[3] / (3 * Math.PI / 180 * 50)   // 约 ±8.6 rad/s
+        ].map(v => Math.max(-5, Math.min(5, v)));  // 裁剪防溢出
+    }
+}
+
+// ================================================================
+//  神经网络 — Dueling DQN 架构（3层 MLP，ELU 激活）
+//  输入:4  隐1:16(ELU)  隐2:16(ELU)  隐3:15(ELU)
+//    隐3前5个神经元 → V 分支 (5→1, linear)    状态价值
+//    隐3后10个神经元 → A 分支 (10→2, linear)   优势函数
+//  Q_left  = V + (A_left - mean_A)
+//  Q_right = V + (A_right - mean_A)
+//  V 被绑定为 max(Q_left, Q_right)，即网络学习到的 Q 值自动满足此约束
+// ================================================================
+class QNet {
+    constructor(lr = 0.001) {
+        this.lr = lr;
+        // Xavier 初始化 — 3 隐层架构
+        this.W1 = this._xavier(4,  16);   this.b1 = this._zeros(16);   // 4→16
+        this.W2 = this._xavier(16, 16);   this.b2 = this._zeros(16);   // 16→16 (V/A共用)
+        this.W3 = this._xavier(16, 15);   this.b3 = this._zeros(15);   // 16→15 (V/A共用，再分路)
+        // V 分支：a3前5个神经元 → V(1)
+        this.W4_V  = this._xavier(5,  1);  this.b4_V  = this._zeros(1);
+        // A 分支：a3后10个神经元 → A_left, A_right
+        this.W4_A  = this._xavier(10, 2);  this.b4_A  = this._zeros(2);
+        this._initAdam();
+    }
+
+    _xavier(fan_in, fan_out) {
+        var scale = Math.sqrt(2.0 / (fan_in + fan_out));
+        return Array.from({length: fan_in}, function() {
+            return Array.from({length: fan_out}, function() {
+                return (Math.random() * 2 - 1) * scale;
+            });
+        });
+    }
+    _zeros(n) { return new Array(n).fill(0); }
+
+    // ELU 及导数
+    _elu(x)  { return x >= 0 ? x : Math.exp(x) - 1; }
+    _deluDz(z, a) { return z >= 0 ? 1 : a + 1; }
+
+    // 矩阵-向量乘法 + bias
+    _linear(x, W, b) {
+        var out = [];
+        for (var j = 0; j < b.length; j++) {
+            var s = b[j];
+            for (var i = 0; i < x.length; i++) s += x[i] * W[i][j];
+            out.push(s);
+        }
+        return out;
+    }
+
+    // ============================================================
+    //  前向传播（返回 cache 供反向传播）
+    //  架构: 4→16(ELU)→16(ELU)→15(ELU) → 分路 V(5→1) + A(10→2)
+    //  out: [V, Q_left, Q_right]
+    // ============================================================
+    forward(input) {
+        var z1 = this._linear(input, this.W1, this.b1);
+        var a1 = z1.map(function(v) { return v >= 0 ? v : Math.exp(v) - 1; });
+        var z2 = this._linear(a1,   this.W2, this.b2);
+        var a2 = z2.map(function(v) { return v >= 0 ? v : Math.exp(v) - 1; });
+        var z3 = this._linear(a2,   this.W3, this.b3);
+        var a3 = z3.map(function(v) { return v >= 0 ? v : Math.exp(v) - 1; });
+
+        // 分流 a3：前5个给 V，后10个给 A
+        var a3_V = a3.slice(0, 5);
+        var a3_A = a3.slice(5, 15);
+
+        var v_raw = this._linear(a3_V, this.W4_V, this.b4_V);
+        var a_raw = this._linear(a3_A, this.W4_A, this.b4_A);
+
+        // 中心化 Advantage（减去均值）
+        var meanA = (a_raw[0] + a_raw[1]) / 2;
+        var A_left  = a_raw[0] - meanA;
+        var A_right = a_raw[1] - meanA;
+
+        var V = v_raw[0];
+        var Q_left  = V + A_left;
+        var Q_right = V + A_right;
+
+        return {
+            input: input,
+            z1: z1, a1: a1,
+            z2: z2, a2: a2,
+            z3: z3, a3: a3,
+            a3_V: a3_V, a3_A: a3_A,
+            v_raw: v_raw, a_raw: a_raw,
+            V: V, A_left: A_left, A_right: A_right,
+            Q_left: Q_left, Q_right: Q_right,
+            out: [V, Q_left, Q_right]
+        };
+    }
+
+    // ============================================================
+    //  predict：返回 [V, Q_left, Q_right]
+    // ============================================================
+    predict(input) {
+        var res = this.forward(input);
+        var ok = true;
+        for (var i = 0; i < res.out.length; i++) {
+            if (!Number.isFinite(res.out[i])) { ok = false; break; }
+        }
+        return ok ? res.out : [0, 0, 0];
+    }
+
+    // ============================================================
+    //  计算单条样本梯度并累加到 _gAcc（不更新权重）
+    //  target: [target_V, target_Q_left, target_Q_right]
+    //  actionMask: [mask_V, mask_left, mask_right]
+    // ============================================================
+    _calcGrad(input, target, actionMask) {
+        var cache = this.forward(input);
+        var z1 = cache.z1, a1 = cache.a1;
+        var z2 = cache.z2, a2 = cache.a2;
+        var z3 = cache.z3, a3 = cache.a3;
+        var a3_V = cache.a3_V, a3_A = cache.a3_A;
+        var V = cache.V, Q_left = cache.Q_left, Q_right = cache.Q_right;
+        
+        var huberD = function(diff) {
+            var absD = diff >= 0 ? diff : -diff;
+            return absD <= 1.0 ? 2 * diff : 2.0 * (diff >= 0 ? 1 : -1);
+        };
+
+        // ========== 1. Q 分支损失梯度 ==========
+        var dQl = actionMask[1] ? huberD(Q_left - target[1]) : 0;
+        var dQr = actionMask[2] ? huberD(Q_right - target[2]) : 0;
+
+        // ========== 2. V 绑定：V = max(Q_left, Q_right) ==========
+        var dV_loss = actionMask[0] ? huberD(V - target[0]) : 0;
+        var leftBigger = Q_left >= Q_right;
+        var dQl_from_V = leftBigger ? dV_loss : 0;
+        var dQr_from_V = leftBigger ? 0 : dV_loss;
+
+        // ========== 3. 合并 Q 总梯度 ==========
+        var dQl_total = dQl + dQl_from_V;
+        var dQr_total = dQr + dQr_from_V;
+
+        // ========== 4. 反向传播到 V_raw 和 A_raw ==========
+        // Q = V_raw + A, A = A_raw - mean(A_raw)
+        // dL/dV_raw = dQl_total + dQr_total
+        // dL/dA_raw[0] = dQl_total*0.5 - dQr_total*0.5
+        // dL/dA_raw[1] = dQr_total*0.5 - dQl_total*0.5
+        var dV_raw = dQl_total + dQr_total;
+        var dA_raw_0 = dQl_total * 0.5 - dQr_total * 0.5;
+        var dA_raw_1 = dQr_total * 0.5 - dQl_total * 0.5;
+
+        // ========== 5. V 分支反向传播 ==========
+        var dW4_V = [], db4_V_arr = [dV_raw], da3_V = [];
+        for (var iv = 0; iv < 5; iv++) {
+            dW4_V.push([a3_V[iv] * dV_raw]);
+            da3_V.push(this.W4_V[iv][0] * dV_raw);
+        }
+
+        // ========== 6. A 分支反向传播 ==========
+        var dW4_A = [], db4_A_arr = [dA_raw_0, dA_raw_1], da3_A = [];
+        for (var ia = 0; ia < 10; ia++) {
+            dW4_A.push([a3_A[ia] * dA_raw_0, a3_A[ia] * dA_raw_1]);
+            da3_A.push(this.W4_A[ia][0] * dA_raw_0 + this.W4_A[ia][1] * dA_raw_1);
+        }
+
+        // ========== 7. 合并 da3 → Layer3 反向传播 ==========
+        var da3 = da3_V.concat(da3_A);
+        var dz3 = [];
+        for (var i3 = 0; i3 < 15; i3++) {
+            dz3.push(da3[i3] * (z3[i3] >= 0 ? 1 : a3[i3] + 1));
+        }
+        // z3 = a2·W3 + b3,  a2:16-dim, W3:16×15
+        var dW3 = [], db3_arr = dz3.slice(), da2 = [];
+        for (var k = 0; k < 16; k++) {
+            var row = [];
+            var s = 0;
+            for (var j3 = 0; j3 < 15; j3++) {
+                row.push(a2[k] * dz3[j3]);
+                s += this.W3[k][j3] * dz3[j3];
+            }
+            dW3.push(row);
+            da2.push(s);
+        }
+
+        // ========== 8. Layer2 反向传播 ==========
+        var dz2 = [];
+        for (var i2 = 0; i2 < 16; i2++) {
+            dz2.push(da2[i2] * (z2[i2] >= 0 ? 1 : a2[i2] + 1));
+        }
+        var dW2 = [], db2_arr = dz2.slice(), da1 = [];
+        for (var k2 = 0; k2 < 16; k2++) {
+            var row2 = [];
+            var s2 = 0;
+            for (var j2 = 0; j2 < 16; j2++) {
+                row2.push(a1[k2] * dz2[j2]);
+                s2 += this.W2[k2][j2] * dz2[j2];
+            }
+            dW2.push(row2);
+            da1.push(s2);
+        }
+
+        // ========== 9. Layer1 反向传播 ==========
+        var dz1 = [];
+        for (var i1 = 0; i1 < 16; i1++) {
+            dz1.push(da1[i1] * (z1[i1] >= 0 ? 1 : a1[i1] + 1));
+        }
+        var dW1 = [], db1_arr = dz1.slice();
+        for (var k1 = 0; k1 < 4; k1++) {
+            var row1 = [];
+            for (var j1 = 0; j1 < 16; j1++) {
+                row1.push(input[k1] * dz1[j1]);
+            }
+            dW1.push(row1);
+        }
+
+        // ========== 10. 累加到 _gAcc ==========
+        for (var wi = 0; wi < 4; wi++)
+            for (var wj = 0; wj < 16; wj++) this._gAccW1[wi][wj] += dW1[wi][wj];
+        for (var bj = 0; bj < 16; bj++) this._gAccb1[bj] += db1_arr[bj];
+
+        for (var wi2 = 0; wi2 < 16; wi2++)
+            for (var wj2 = 0; wj2 < 16; wj2++) this._gAccW2[wi2][wj2] += dW2[wi2][wj2];
+        for (var bj2 = 0; bj2 < 16; bj2++) this._gAccb2[bj2] += db2_arr[bj2];
+
+        for (var wi3 = 0; wi3 < 16; wi3++)
+            for (var wj3 = 0; wj3 < 15; wj3++) this._gAccW3[wi3][wj3] += dW3[wi3][wj3];
+        for (var bj3 = 0; bj3 < 15; bj3++) this._gAccb3[bj3] += db3_arr[bj3];
+
+        for (var wv = 0; wv < 5; wv++) this._gAccW4_V[wv][0] += dW4_V[wv][0];
+        this._gAccb4_V[0] += db4_V_arr[0];
+
+        for (var wa = 0; wa < 10; wa++)
+            for (var waj = 0; waj < 2; waj++) this._gAccW4_A[wa][waj] += dW4_A[wa][waj];
+        for (var baj = 0; baj < 2; baj++) this._gAccb4_A[baj] += db4_A_arr[baj];
+    }
+
+    // ============================================================
+    //  将累积梯度除以 n，执行一次 Adam 更新，然后清零累加器
+    // ============================================================
+    applyBatch(n) {
+        var inv = 1.0 / n;
+        var dW1 = this._gAccW1.map(function(r) { return r.map(function(v) { return v * inv; }); });
+        var db1 = this._gAccb1.map(function(v) { return v * inv; });
+        var dW2 = this._gAccW2.map(function(r) { return r.map(function(v) { return v * inv; }); });
+        var db2 = this._gAccb2.map(function(v) { return v * inv; });
+        var dW3 = this._gAccW3.map(function(r) { return r.map(function(v) { return v * inv; }); });
+        var db3 = this._gAccb3.map(function(v) { return v * inv; });
+        var dW4_V = this._gAccW4_V.map(function(r) { return r.map(function(v) { return v * inv; }); });
+        var db4_V = this._gAccb4_V.map(function(v) { return v * inv; });
+        var dW4_A = this._gAccW4_A.map(function(r) { return r.map(function(v) { return v * inv; }); });
+        var db4_A = this._gAccb4_A.map(function(v) { return v * inv; });
+
+        this._adamUpdate(dW1, db1, dW2, db2, dW3, db3, dW4_V, db4_V, dW4_A, db4_A);
+        this._zeroGradAcc();
+    }
+
+    // 清零梯度累加器
+    _zeroGradAcc() {
+        var i;
+        for (i = 0; i < 4;  i++) this._gAccW1[i].fill(0);
+        this._gAccb1.fill(0);
+        for (i = 0; i < 16; i++) this._gAccW2[i].fill(0);
+        this._gAccb2.fill(0);
+        for (i = 0; i < 16; i++) this._gAccW3[i].fill(0);
+        this._gAccb3.fill(0);
+        for (i = 0; i < 5;  i++) this._gAccW4_V[i].fill(0);
+        this._gAccb4_V.fill(0);
+        for (i = 0; i < 10; i++) this._gAccW4_A[i].fill(0);
+        this._gAccb4_A.fill(0);
+    }
+
+    // 单样本梯度累加（不更新权重）
+    // 调用者需在 batch 采样完后调用 applyBatch(n)
+    accumStep(input, target, actionMask) {
+        this._calcGrad(input, target, actionMask);
+    }
+
+    // 把另一个网络的参数复制给自己
+    copyFrom(other) {
+        this.W1 = other.W1.map(function(r) { return r.slice(); });
+        this.b1 = other.b1.slice();
+        this.W2 = other.W2.map(function(r) { return r.slice(); });
+        this.b2 = other.b2.slice();
+        this.W3 = other.W3.map(function(r) { return r.slice(); });
+        this.b3 = other.b3.slice();
+        this.W4_V = other.W4_V.map(function(r) { return r.slice(); });
+        this.b4_V = other.b4_V.slice();
+        this.W4_A = other.W4_A.map(function(r) { return r.slice(); });
+        this.b4_A = other.b4_A.slice();
+    }
+
+    // ============================================================
+    //  导出为 TensorFlow.js Functional 模型格式
+    //  网络结构：input(4) → dense_1(16,elu) → dense_2(16,elu) → dense_3(15,elu)
+    //           → split → dense_V(5→1,linear) + dense_A(10→2,linear)
+    //           → combine → output(2: Q_left, Q_right)
+    //  由于 TF.js Functional 模型导出较为复杂，这里用带 masked kernel 的方式导出：
+    //    dense_V：15→1，但只有前5个权重有效（后10个为0）
+    //    dense_A：15→2，但只有后10个权重有效（前5个为0）
+    // ============================================================
+    saveTFJS(baseName) {
+        // ---------- 1. 构造 model.json ----------
+        var topology = {
+            "class_name": "Functional",
+            "config": {
+                "name": "cartpole_dueling_dqn",
+                "layers": [
+                    {
+                        "class_name": "InputLayer",
+                        "config": { "name": "input_state", "batch_input_shape": [null, 4], "dtype": "float32" },
+                        "inbound_nodes": []
+                    },
+                    {
+                        "class_name": "Dense",
+                        "config": {
+                            "name": "dense_1", "trainable": true, "dtype": "float32",
+                            "units": 16, "activation": "elu", "use_bias": true,
+                            "kernel_initializer": { "class_name": "VarianceScaling", "config": { "mode": "fan_avg", "distribution": "uniform", "scale": 1.0, "seed": null } },
+                            "bias_initializer": { "class_name": "Zeros", "config": {} }
+                        },
+                        "inbound_nodes": [[["input_state", 0, 0]]]
+                    },
+                    {
+                        "class_name": "Dense",
+                        "config": {
+                            "name": "dense_2", "trainable": true, "dtype": "float32",
+                            "units": 16, "activation": "elu", "use_bias": true,
+                            "kernel_initializer": { "class_name": "VarianceScaling", "config": { "mode": "fan_avg", "distribution": "uniform", "scale": 1.0, "seed": null } },
+                            "bias_initializer": { "class_name": "Zeros", "config": {} }
+                        },
+                        "inbound_nodes": [[["dense_1", 0, 0]]]
+                    },
+                    {
+                        "class_name": "Dense",
+                        "config": {
+                            "name": "dense_3", "trainable": true, "dtype": "float32",
+                            "units": 15, "activation": "elu", "use_bias": true,
+                            "kernel_initializer": { "class_name": "VarianceScaling", "config": { "mode": "fan_avg", "distribution": "uniform", "scale": 1.0, "seed": null } },
+                            "bias_initializer": { "class_name": "Zeros", "config": {} }
+                        },
+                        "inbound_nodes": [[["dense_2", 0, 0]]]
+                    },
+                    {
+                        "class_name": "Dense",
+                        "config": {
+                            "name": "dense_V", "trainable": true, "dtype": "float32",
+                            "units": 1, "activation": "linear", "use_bias": true,
+                            "kernel_initializer": { "class_name": "VarianceScaling", "config": { "mode": "fan_avg", "distribution": "uniform", "scale": 1.0, "seed": null } },
+                            "bias_initializer": { "class_name": "Zeros", "config": {} }
+                        },
+                        "inbound_nodes": [[["dense_3", 0, 0]]]
+                    },
+                    {
+                        "class_name": "Dense",
+                        "config": {
+                            "name": "dense_A", "trainable": true, "dtype": "float32",
+                            "units": 2, "activation": "linear", "use_bias": true,
+                            "kernel_initializer": { "class_name": "VarianceScaling", "config": { "mode": "fan_avg", "distribution": "uniform", "scale": 1.0, "seed": null } },
+                            "bias_initializer": { "class_name": "Zeros", "config": {} }
+                        },
+                        "inbound_nodes": [[["dense_3", 0, 0]]]
+                    }
+                ],
+                "input_layers": [["input_state", 0, 0]],
+                "output_layers": [["dense_V", 0, 0], ["dense_A", 0, 0]]
+            }
+        };
+
+        var weightsManifest = [{
+            "paths": [baseName + '.weights.bin'],
+            "weights": [
+                { "name": "dense_1/kernel", "shape": [4, 16],  "dtype": "float32" },
+                { "name": "dense_1/bias",   "shape": [16],     "dtype": "float32" },
+                { "name": "dense_2/kernel", "shape": [16, 16], "dtype": "float32" },
+                { "name": "dense_2/bias",   "shape": [16],     "dtype": "float32" },
+                { "name": "dense_3/kernel", "shape": [16, 15], "dtype": "float32" },
+                { "name": "dense_3/bias",   "shape": [15],     "dtype": "float32" },
+                // V 分支：15→1（前5个来自 W4_V，后10个为 0）
+                { "name": "dense_V/kernel", "shape": [15, 1],  "dtype": "float32" },
+                { "name": "dense_V/bias",   "shape": [1],      "dtype": "float32" },
+                // A 分支：15→2（前5个为 0，后10个来自 W4_A）
+                { "name": "dense_A/kernel", "shape": [15, 2],  "dtype": "float32" },
+                { "name": "dense_A/bias",   "shape": [2],      "dtype": "float32" }
+            ]
+        }];
+
+        var modelJson = {
+            "format": "layers-model",
+            "generatedBy": "CartPole-DuelingDQN",
+            "convertedBy": "CartPole-DuelingDQN Export",
+            "modelTopology": topology,
+            "weightsManifest": weightsManifest
+        };
+
+        // ---------- 2. 拼接权重二进制（Float32 LE）----------
+        var flatWeights = [];
+        var i, j;
+        // W1: [4][16]
+        for (i = 0; i < 4;  i++)
+            for (j = 0; j < 16; j++) flatWeights.push(this.W1[i][j]);
+        // b1: [16]
+        for (j = 0; j < 16; j++) flatWeights.push(this.b1[j]);
+        // W2: [16][16]
+        for (i = 0; i < 16; i++)
+            for (j = 0; j < 16; j++) flatWeights.push(this.W2[i][j]);
+        // b2: [16]
+        for (j = 0; j < 16; j++) flatWeights.push(this.b2[j]);
+        // W3: [16][15]
+        for (i = 0; i < 16; i++)
+            for (j = 0; j < 15; j++) flatWeights.push(this.W3[i][j]);
+        // b3: [15]
+        for (j = 0; j < 15; j++) flatWeights.push(this.b3[j]);
+        // dense_V/kernel: [15][1] — 前5行来自 W4_V，后10行为 0
+        for (i = 0; i < 5;  i++) flatWeights.push(this.W4_V[i][0]);
+        for (i = 0; i < 10; i++) flatWeights.push(0);
+        // dense_V/bias: [1]
+        flatWeights.push(this.b4_V[0]);
+        // dense_A/kernel: [15][2] — 前5行为 0，后10行来自 W4_A
+        for (i = 0; i < 5;  i++) { flatWeights.push(0); flatWeights.push(0); }
+        for (i = 0; i < 10; i++) {
+            flatWeights.push(this.W4_A[i][0]);
+            flatWeights.push(this.W4_A[i][1]);
+        }
+        // dense_A/bias: [2]
+        flatWeights.push(this.b4_A[0]);
+        flatWeights.push(this.b4_A[1]);
+
+        var binBuf = new ArrayBuffer(flatWeights.length * 4);
+        var f32View = new Float32Array(binBuf);
+        for (i = 0; i < flatWeights.length; i++) f32View[i] = flatWeights[i];
+        var binBlob = new Blob([f32View], { type: 'application/octet-stream' });
+
+        // ---------- 3. 触发下载 ----------
+        var jsonBlob = new Blob([JSON.stringify(modelJson, null, 2)], { type: 'application/json' });
+        var a1 = document.createElement('a');
+        a1.href = URL.createObjectURL(jsonBlob);
+        a1.download = baseName + '.json';
+        document.body.appendChild(a1); a1.click(); document.body.removeChild(a1);
+        URL.revokeObjectURL(a1.href);
+
+        setTimeout(function() {
+            var a2 = document.createElement('a');
+            a2.href = URL.createObjectURL(binBlob);
+            a2.download = baseName + '.weights.bin';
+            document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+            URL.revokeObjectURL(a2.href);
+        }, 300);
+    }
+
+    // ============================================================
+    //  从 TensorFlow.js 格式加载权重
+    // ============================================================
+    static loadTFJS(jsonData, binBuf) {
+        var net = new QNet(0.001);
+
+        var manifest = jsonData.weightsManifest[0];
+        var f32 = new Float32Array(binBuf);
+        var offset = 0;
+        var i, j;
+
+        for (var wi = 0; wi < manifest.weights.length; wi++) {
+            var w = manifest.weights[wi];
+            var shape = w.shape;
+            var total = shape[0];
+            for (var si = 1; si < shape.length; si++) total *= shape[si];
+
+            if (w.name === 'dense_1/kernel') {
+                for (i = 0; i < shape[0]; i++)
+                    for (j = 0; j < shape[1]; j++) net.W1[i][j] = f32[offset++];
+            } else if (w.name === 'dense_1/bias') {
+                for (j = 0; j < shape[0]; j++) net.b1[j] = f32[offset++];
+            } else if (w.name === 'dense_2/kernel') {
+                for (i = 0; i < shape[0]; i++)
+                    for (j = 0; j < shape[1]; j++) net.W2[i][j] = f32[offset++];
+            } else if (w.name === 'dense_2/bias') {
+                for (j = 0; j < shape[0]; j++) net.b2[j] = f32[offset++];
+            } else if (w.name === 'dense_3/kernel') {
+                for (i = 0; i < shape[0]; i++)
+                    for (j = 0; j < shape[1]; j++) net.W3[i][j] = f32[offset++];
+            } else if (w.name === 'dense_3/bias') {
+                for (j = 0; j < shape[0]; j++) net.b3[j] = f32[offset++];
+            } else if (w.name === 'dense_V/kernel') {
+                // [15][1] → 前5行到 W4_V，后10行为 0（跳过）
+                for (i = 0; i < 5; i++) net.W4_V[i][0] = f32[offset++];
+                offset += 10; // 跳过后10行（全0行）
+            } else if (w.name === 'dense_V/bias') {
+                net.b4_V[0] = f32[offset++];
+            } else if (w.name === 'dense_A/kernel') {
+                // [15][2] → 前5行为 0（跳过），后10行到 W4_A
+                offset += 5 * 2; // 跳过前5行
+                for (i = 0; i < 10; i++) {
+                    net.W4_A[i][0] = f32[offset++];
+                    net.W4_A[i][1] = f32[offset++];
+                }
+            } else if (w.name === 'dense_A/bias') {
+                net.b4_A[0] = f32[offset++];
+                net.b4_A[1] = f32[offset++];
+            } else {
+                offset += total;
+            }
+        }
+        return net;
+    }
+
+    // ===== Adam 优化器 =====
+    _initAdam() {
+        var z = function(r, c) { var a=[]; for(var i=0;i<r;i++){var row=[]; for(var j=0;j<c;j++) row.push(0); a.push(row);} return a; };
+        var zv = function(n) { var a=[]; for(var i=0;i<n;i++) a.push(0); return a; };
+        this._t = 0;
+        this._beta1 = 0.9; this._beta2 = 0.999; this._eps = 1e-8;
+        // Layer1: W1(4×16), b1(16)
+        this._mW1=z(4,16); this._vW1=z(4,16); this._mb1=zv(16); this._vb1=zv(16);
+        // Layer2: W2(16×16), b2(16)
+        this._mW2=z(16,16); this._vW2=z(16,16); this._mb2=zv(16); this._vb2=zv(16);
+        // Layer3: W3(16×15), b3(15)
+        this._mW3=z(16,15); this._vW3=z(16,15); this._mb3=zv(15); this._vb3=zv(15);
+        // V 分支: W4_V(5×1), b4_V(1)
+        this._mW4_V=z(5,1); this._vW4_V=z(5,1); this._mb4_V=zv(1); this._vb4_V=zv(1);
+        // A 分支: W4_A(10×2), b4_A(2)
+        this._mW4_A=z(10,2); this._vW4_A=z(10,2); this._mb4_A=zv(2); this._vb4_A=zv(2);
+        // 梯度累加器
+        this._gAccW1=z(4,16);  this._gAccb1=zv(16);
+        this._gAccW2=z(16,16); this._gAccb2=zv(16);
+        this._gAccW3=z(16,15); this._gAccb3=zv(15);
+        this._gAccW4_V=z(5,1);  this._gAccb4_V=zv(1);
+        this._gAccW4_A=z(10,2); this._gAccb4_A=zv(2);
+    }
+
+    _adamUpdate(dW1,db1,dW2,db2,dW3,db3,dW4_V,db4_V,dW4_A,db4_A) {
+        var clip = 10;
+        function clipArr(a) { for(var i=0;i<a.length;i++) for(var j=0;j<a[i].length;j++) a[i][j]=Math.max(-clip,Math.min(clip,a[i][j])); }
+        function clipVec(v) { for(var j=0;j<v.length;j++) v[j]=Math.max(-clip,Math.min(clip,v[j])); }
+        clipArr(dW1); clipVec(db1);
+        clipArr(dW2); clipVec(db2);
+        clipArr(dW3); clipVec(db3);
+        clipArr(dW4_V); clipVec(db4_V);
+        clipArr(dW4_A); clipVec(db4_A);
+
+        this._t++;
+        var beta1=this._beta1, beta2=this._beta2, eps=this._eps, lr=this.lr, t=this._t;
+        var bc1=1-Math.pow(beta1,t), bc2=1-Math.pow(beta2,t);
+
+        function updW(W,dW,mW,vW) {
+            for(var i=0;i<W.length;i++) for(var j=0;j<W[0].length;j++) {
+                mW[i][j]=beta1*mW[i][j]+(1-beta1)*dW[i][j];
+                vW[i][j]=beta2*vW[i][j]+(1-beta2)*dW[i][j]*dW[i][j];
+                W[i][j]-=lr*(mW[i][j]/bc1)/(Math.sqrt(vW[i][j]/bc2)+eps);
+            }
+        }
+        function updB(b,db,mb,vb) {
+            for(var j=0;j<b.length;j++) {
+                mb[j]=beta1*mb[j]+(1-beta1)*db[j];
+                vb[j]=beta2*vb[j]+(1-beta2)*db[j]*db[j];
+                b[j]-=lr*(mb[j]/bc1)/(Math.sqrt(vb[j]/bc2)+eps);
+            }
+        }
+        // Layer1
+        updW(this.W1,dW1,this._mW1,this._vW1); updB(this.b1,db1,this._mb1,this._vb1);
+        // Layer2
+        updW(this.W2,dW2,this._mW2,this._vW2); updB(this.b2,db2,this._mb2,this._vb2);
+        // Layer3
+        updW(this.W3,dW3,this._mW3,this._vW3); updB(this.b3,db3,this._mb3,this._vb3);
+        // V 分支
+        updW(this.W4_V,dW4_V,this._mW4_V,this._vW4_V); updB(this.b4_V,db4_V,this._mb4_V,this._vb4_V);
+        // A 分支
+        updW(this.W4_A,dW4_A,this._mW4_A,this._vW4_A); updB(this.b4_A,db4_A,this._mb4_A,this._vb4_A);
+    }
+}
+
+// ================================================================
+//  经验回放池
+// ================================================================
+class ReplayBuffer {
+    constructor(maxSize = 2000) {
+        this.buf = [];
+        this.maxSize = maxSize;
+    }
+    push(exp) {
+        if (this.buf.length >= this.maxSize) this.buf.shift();
+        this.buf.push(exp);
+    }
+    sample(n) {
+        const out = [];
+        for (let i = 0; i < n && this.buf.length > 0; i++) {
+            out.push(this.buf[Math.floor(Math.random() * this.buf.length)]);
+        }
+        return out;
+    }
+    size() { return this.buf.length; }
+}
+
+// ================================================================
+//  全局状态
+// ================================================================
+let env        = new CartPoleEnv();
+let behaviorNet  = null;   // 行为网络（或唯一网络）
+let targetNet    = null;   // 目标网络
+let replayBuffer = null;
+
+let isTraining       = false;
+let shouldStop       = false;
+let episodeReturns   = [];      // 每条 Episode 的累积奖励
+let episodeStepsList = [];      // 每条 Episode 的步数
+let episodeTrajs     = [];      // 每条 Episode 的状态轨迹 (回放用)
+let qValueLogs       = [];      // 所有更新步的 Q 值日志（用于展示和导出）
+let _updateCount     = 0;       // 全局更新计数（跨 Episode，用于 Q 值日志采样）
+let _totalSteps      = 0;       // 全局环境步数（跨 Episode，用于目标网络同步计数）
+
+let returnChartObj   = null;
+let replayTimer      = null;    // 回放定时器
+let replayEpIdx      = -1;      // 当前回放的 Episode 索引
+let replayFrameIdx   = 0;
+
+// ================================================================
+//  ε-greedy（行为网络）
+//  predict 返回 [V, Q_left, Q_right]
+// ================================================================
+function epsilonGreedy(state, epsilon) {
+    if (Math.random() < epsilon) return Math.floor(Math.random() * 2);
+    const ns = CartPoleEnv.normalize(state);
+    const q  = behaviorNet.predict(ns);  // [V, Q_left, Q_right]
+    return q[1] >= q[2] ? 0 : 1;  // 比较 Q_left(1) 和 Q_right(2)
+}
+
+// ================================================================
+//  目标网络 Q 值（目标策略：greedy）
+//  返回 [V, Q_left, Q_right]
+// ================================================================
+function targetQ(state) {
+    const ns  = CartPoleEnv.normalize(state);
+    return targetNet.predict(ns);
+}
+
+// ================================================================
+//  单步网络更新（Dueling DQN）
+//  predict 返回 [V, Q_left, Q_right]
+//  target 向量: [target_V, target_Q_left, target_Q_right]
+//  actionMask:   [mask_V,   mask_left,     mask_right]
+// ================================================================
+function updateNet(s, a, r, sn, done, gamma) {
+    const nsS  = CartPoleEnv.normalize(s);
+    const qCur = behaviorNet.predict(nsS);   // [V, Q_left, Q_right]
+
+    let tdTarget;
+    if (done) {
+        tdTarget = r;
+    } else {
+        const qNext = targetQ(sn);  // [V', Q'_left, Q'_right]
+        tdTarget = r + gamma * Math.max(qNext[1], qNext[2]);
+    }
+    tdTarget = Math.max(-500, Math.min(500, tdTarget));
+
+    // V 绑定：V = max(Q_left, Q_right)
+    const targetV = Math.max(qCur[1], qCur[2]);
+    // 只有被选中的动作 Q 值需要更新为 TD target
+    const targetVec  = [targetV, qCur[1], qCur[2]];
+    if (a === 0) {
+        targetVec[1] = tdTarget;
+    } else {
+        targetVec[2] = tdTarget;
+    }
+    // actionMask: V 总是更新（保持绑定），被选中的动作也更新
+    const actionMask = [true, a === 0, a === 1];
+
+    behaviorNet.accumStep(nsS, targetVec, actionMask);
+
+    return {
+        V: qCur[0],
+        qBehavior: [qCur[1], qCur[2]],  // [Q_left, Q_right]
+        qTarget:   [targetVec[1], targetVec[2]],
+        targetV:   targetVec[0]
+    };
+}
+
+// ================================================================
+//  运行一条 Episode（Dyna-Q 风格：每步真实更新+N条经验回放）
+// ================================================================
+function runEpisode(epsilon, gamma, replayN, maxSteps, qLogSample) {
+    let state = env.reset();
+    let totalReward = 0;
+    const traj = [CartPoleEnv.normalize(state).concat([0])];
+    const rawTraj   = [[...state, null]];
+    const qLog = [];
+    let steps = 0;
+
+    while (!env.done && steps < maxSteps) {
+        const action = epsilonGreedy(state, epsilon);
+        const { state: nextState, reward, done } = env.step(action);
+        let totalGradCount = 0;
+
+        // 真实经验 → 只累加梯度，不更新权重
+        /*
+        const r0 = updateNet(state, action, reward, nextState, done, gamma);
+        totalGradCount++;
+*/
+        // 存入经验池
+        replayBuffer.push({ s: state, a: action, r: reward, sn: nextState, done });
+
+        // ---- 经验回放：累加梯度 ----
+        let batchLogInfo = null;
+        const replayPerStep = Math.max(1, Math.min(4, Math.floor(replayN / 8)));
+        if (replayBuffer.size() >= replayN && replayN > 0) {
+            const samples = replayBuffer.sample(replayPerStep);
+
+            for (const exp of samples) {
+                const nsS  = CartPoleEnv.normalize(exp.s);
+                const qCur = behaviorNet.predict(nsS);
+                let tgt;
+                if (exp.done) {
+                    tgt = exp.r;
+                } else {
+                    const qNext = targetQ(exp.sn);
+                    tgt = exp.r + gamma * Math.max(qNext[1], qNext[2]);
+                }
+                tgt = Math.max(-500, Math.min(500, tgt));
+
+                const targetV = (qCur[1] + qCur[2])/2;
+                const targetVec  = [targetV, qCur[1], qCur[2]];
+                if (exp.a === 0) {
+                    targetVec[1] = tgt;
+                } else {
+                    targetVec[2] = tgt;
+                }
+               // targetVec[0]  = (targetVec[1] + targetVec[2])/2;
+                const actionMask = [true, exp.a === 0, exp.a === 1];
+
+                behaviorNet._calcGrad(nsS, targetVec, actionMask);
+                totalGradCount++;
+
+                if (!batchLogInfo) {
+                    batchLogInfo = { action: exp.a, qCur, targetVec };
+                }
+            }
+        }
+
+        // 本步所有样本梯度累加完毕，用均值更新一次
+        if (totalGradCount > 0) {
+            behaviorNet.applyBatch(totalGradCount);
+            _updateCount++;
+
+            // Q 值日志
+            
+            if (qLogSample > 0 && _updateCount % qLogSample === 0) {
+                /*
+                qLog.push({ type: 'real', step: steps, action,
+                            V: r0.V,
+                            qB0: r0.qBehavior[0], qB1: r0.qBehavior[1],
+                            tV: r0.targetV,
+                            qT0: r0.qTarget[0],  qT1: r0.qTarget[1] });
+*/
+                if (batchLogInfo) {
+                    qLog.push({ type: 'replay', step: steps, action: batchLogInfo.action,
+                                V: batchLogInfo.qCur[0],
+                                qB0: batchLogInfo.qCur[1],       qB1: batchLogInfo.qCur[2],
+                                tV: batchLogInfo.targetVec[0],
+                                qT0: batchLogInfo.targetVec[1],  qT1: batchLogInfo.targetVec[2] });
+                }
+            }
+        }
+
+        rawTraj.push([...nextState, action]);
+        totalReward += reward;
+        state = nextState;
+        steps++;
+    }
+
+    return { totalReward, steps, rawTraj, qLog };
+}
+
+// ================================================================
+//  获取衰减 ε
+// ================================================================
+function getEpsilon(ep) {
+    const s = parseFloat(document.getElementById('epsilonStart').value);
+    const e = parseFloat(document.getElementById('epsilonEnd').value);
+    const d = parseFloat(document.getElementById('epsilonDecay').value);
+    return Math.max(e, s * Math.pow(d, ep));
+}
+
+// ================================================================
+//  开始训练
+// ================================================================
+function startTraining() {
+    if (isTraining) return;
+
+    const lr         = parseFloat(document.getElementById('alpha').value);
+    const gamma      = parseFloat(document.getElementById('gamma').value);
+    const numEp      = parseInt(document.getElementById('numEpisodes').value);
+    const replayN    = parseInt(document.getElementById('replayN').value);
+    const bufferSize = parseInt(document.getElementById('bufferSize').value);
+    const qLogSample = parseInt(document.getElementById('qLogSample').value);
+    const targetSyncSteps = parseInt(document.getElementById('targetSyncSteps').value);
+    const maxSteps   = parseInt(document.getElementById('maxSteps').value);
+    const fps        = parseInt(document.getElementById('simFPS').value);
+    const thetaLimit = parseInt(document.getElementById('thetaLimit').value);
+    env    = new CartPoleEnv(fps, thetaLimit);
+    behaviorNet  = new QNet(lr);
+    targetNet    = new QNet(lr);
+    targetNet.copyFrom(behaviorNet);
+    replayBuffer = new ReplayBuffer(bufferSize);
+
+    isTraining      = true;
+    shouldStop      = false;
+    episodeReturns  = [];
+    episodeStepsList= [];
+    episodeTrajs    = [];
+    qValueLogs      = [];
+    _updateCount    = 0;
+    _totalSteps     = 0;
+
+    document.getElementById('totEpisodes').textContent  = numEp;
+    document.getElementById('curEpisode').textContent   = '0';
+    document.getElementById('curEpsilon').textContent   = '-';
+    document.getElementById('recentReturn').textContent = '-';
+    document.getElementById('avgReturn').textContent    = '-';
+    document.getElementById('bestReturn').textContent   = '-';
+    document.getElementById('trainingProgress').style.width = '0%';
+    document.getElementById('trainingLog').innerHTML    = '';
+    document.getElementById('episodeTableContainer').style.display = 'block';
+    document.getElementById('episodeTableBody').innerHTML = '';
+
+    initReturnChart();
+    addLog(`开始训练 | Dueling DQN 双网络 | ε:${getEpsilon(0).toFixed(3)} | lr:${lr} | γ:${gamma} | N:${replayN} | 池:${bufferSize}`, 'highlight');
+
+    let ep = 0;
+    const batchSize = 5;
+    const episodeData = [];
+
+    function processBatch() {
+        if (shouldStop || ep >= numEp) {
+            if (!shouldStop) finishTraining();
+            isTraining = false;
+            return;
+        }
+
+        for (let i = 0; i < batchSize && ep < numEp; i++) {
+            const epsilon = getEpsilon(ep);
+            const { totalReward, steps, rawTraj, qLog } = runEpisode(epsilon, gamma, replayN, maxSteps, qLogSample);
+
+            // 目标网络同步（按全局步数，跨 Episode 累计）
+            _totalSteps += steps;
+            if (_totalSteps >= targetSyncSteps) {
+                targetNet.copyFrom(behaviorNet);
+                _totalSteps = 0;  // 重置计数
+            }
+
+            // 将本 Episode 日志追加到全局（带 ep 标记）
+            qLog.forEach(row => qValueLogs.push({ ep: ep + 1, ...row }));
+
+            episodeReturns.push(totalReward);
+            episodeStepsList.push(steps);
+            episodeTrajs.push(rawTraj);
+            episodeData.push({ ep: ep + 1, ret: totalReward, eps: epsilon, steps });
+            ep++;
+        }
+
+        // 刷新 Q 值日志表（每 batch 显示最新 200 条）
+        updateQLogTable();
+
+        // 更新 UI
+        const progress = (ep / numEp) * 100;
+        document.getElementById('trainingProgress').style.width = progress + '%';
+        document.getElementById('curEpisode').textContent  = ep;
+        document.getElementById('curEpsilon').textContent  = getEpsilon(ep).toFixed(4);
+
+        const last = episodeReturns[episodeReturns.length - 1];
+        const avg  = episodeReturns.reduce((a,b)=>a+b,0) / episodeReturns.length;
+        const best = Math.max(...episodeReturns);
+        document.getElementById('recentReturn').textContent = last.toFixed(2);
+        document.getElementById('avgReturn').textContent    = avg.toFixed(2);
+        document.getElementById('bestReturn').textContent   = best.toFixed(2);
+
+        if (ep % 10 === 0) {
+            updateEpisodeTable(episodeData);
+            updateReturnChart();
+        }
+        if (ep % 50 === 0) {
+            addLog(`Episode ${ep}/${numEp} | Return=${last.toFixed(2)} | 平均=${avg.toFixed(2)} | ε=${getEpsilon(ep).toFixed(4)}`);
+        }
+
+        // 在训练过程中实时渲染最新帧
+        if (episodeTrajs.length > 0) {
+            const lastTraj = episodeTrajs[episodeTrajs.length - 1];
+            renderCartpole(lastTraj[lastTraj.length - 1], ep, null, false);
+        }
+
+        setTimeout(processBatch, 0);
+    }
+
+    processBatch();
+}
+
+function stopTraining() {
+    shouldStop = true;
+    addLog('正在停止训练...', 'error');
+}
+
+function finishTraining() {
+    isTraining = false;
+    const best = Math.max(...episodeReturns);
+    const avg  = episodeReturns.reduce((a,b)=>a+b,0)/episodeReturns.length;
+    addLog(`训练完成！共 ${episodeReturns.length} Episodes | 平均Return=${avg.toFixed(2)} | 最高=${best.toFixed(2)}`, 'highlight');
+    updateReturnChart();
+
+    document.getElementById('replayEpisode').max = episodeReturns.length;
+    document.getElementById('replayEpisode').value = episodeReturns.length;
+    document.getElementById('replayInfo').textContent = `✓ 训练完成，共 ${episodeReturns.length} Episodes，可回放`;
+    document.getElementById('replayInfo').style.color = '#55efc4';
+
+    // 自动回放最后一条 Episode
+    startReplay();
+}
+
+function resetAll() {
+    stopTraining();
+    stopReplay();
+    behaviorNet  = null;
+    targetNet    = null;
+    replayBuffer = null;
+    episodeReturns  = [];
+    episodeStepsList= [];
+    episodeTrajs    = [];
+    if (returnChartObj) { returnChartObj.destroy(); returnChartObj = null; }
+    initReturnChart();
+    document.getElementById('episodeTableBody').innerHTML = '';
+    document.getElementById('trainingLog').innerHTML = '';
+    document.getElementById('trainingProgress').style.width = '0%';
+    document.getElementById('replayInfo').textContent = '已重置';
+    document.getElementById('replayInfo').style.color = '#888';
+    renderCartpole([0,0,0,0,0], null, null, true);
+    addLog('已重置', 'highlight');
+}
+
+// ================================================================
+//  回放
+// ================================================================
+function startReplay() {
+    stopReplay();
+    const epNum = parseInt(document.getElementById('replayEpisode').value);
+    if (episodeTrajs.length === 0) {
+        document.getElementById('replayInfo').textContent = '⚠️ 请先训练';
+        document.getElementById('replayInfo').style.color = '#ff6b6b';
+        return;
+    }
+    if (epNum < 1 || epNum > episodeTrajs.length) {
+        document.getElementById('replayInfo').textContent = `⚠️ 范围: 1~${episodeTrajs.length}`;
+        document.getElementById('replayInfo').style.color = '#ff6b6b';
+        return;
+    }
+    replayEpIdx   = epNum - 1;
+    replayFrameIdx = 0;
+    const fps     = parseFloat(document.getElementById('replaySpeed').value) || 10;
+    const interval = Math.round(1000 / fps);
+
+    const traj = episodeTrajs[replayEpIdx];
+    document.getElementById('replayInfo').textContent =
+        `▶ 回放 Episode #${epNum}（共 ${traj.length} 帧）Return=${episodeReturns[replayEpIdx].toFixed(2)}`;
+    document.getElementById('replayInfo').style.color = '#fdcb6e';
+
+    replayTimer = setInterval(() => {
+        if (replayFrameIdx >= traj.length) {
+            stopReplay();
+            document.getElementById('replayInfo').textContent = `✓ Episode #${epNum} 回放完毕`;
+            document.getElementById('replayInfo').style.color = '#55efc4';
+            return;
+        }
+        renderCartpole(traj[replayFrameIdx], null, replayEpIdx + 1, false, replayFrameIdx);
+        replayFrameIdx++;
+    }, interval);
+}
+
+function stopReplay() {
+    if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+}
+
+// ================================================================
+//  CartPole Canvas 渲染
+//  stateArr: [p, v, a_rad, w_rad, action] 或 [p, v, a_rad, w_rad]
+//  trainEp:   训练时显示的 Episode 号（null=不显示）
+//  replayEp:  回放时显示的 Episode 号（null=不显示）
+//  frameIdx:  回放时的帧序号（null=不显示）
+//  isIdle:    是否空闲状态
+// ================================================================
+function renderCartpole(stateArr, trainEp, replayEp, isIdle, frameIdx) {
+    const canvas = document.getElementById('cartpoleCanvas');
+    const ctx    = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // 解析状态和动作
+    let p=0, v=0, a_rad=0, w_rad=0, action=null;
+    if (stateArr && stateArr.length >= 4) {
+        [p, v, a_rad, w_rad] = stateArr;
+        if (stateArr.length >= 5) action = stateArr[4];
+    }
+
+    // 背景
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0,0,W,H);
+
+    // 轨道线
+    const groundY = H * 0.72;
+    ctx.strokeStyle = 'rgba(0,217,255,.3)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6,6]);
+    ctx.beginPath(); ctx.moveTo(30,groundY); ctx.lineTo(W-30,groundY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 车子位置映射
+    const scale  = (W - 80) / (2 * 2.4);   // 像素/m
+    const cartX  = W / 2 + p * scale;
+    const cartW  = 60, cartH = 28;
+    const cartY  = groundY - cartH / 2;
+
+    // 车子
+    const cgX = ctx.createLinearGradient(cartX-cartW/2, 0, cartX+cartW/2, 0);
+    cgX.addColorStop(0, '#2d3a5c');
+    cgX.addColorStop(1, '#3a4f7a');
+    ctx.fillStyle = cgX;
+    ctx.strokeStyle = 'rgba(0,217,255,.8)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(cartX-cartW/2, cartY, cartW, cartH, 5);
+    ctx.fill(); ctx.stroke();
+
+    // 车轮
+    [[cartX-15, groundY+6],[cartX+15, groundY+6]].forEach(([wx,wy])=>{
+        ctx.beginPath();
+        ctx.arc(wx,wy,7,0,Math.PI*2);
+        ctx.fillStyle='#1a2540';
+        ctx.fill();
+        ctx.strokeStyle='rgba(0,217,255,.6)';
+        ctx.lineWidth=1.5;
+        ctx.stroke();
+    });
+
+    // ===== 动作箭头（画在车子上方）=====
+    if (action !== null && action !== undefined) {
+        const arrowY  = cartY - 18;
+        const arrowSize = 14;
+        ctx.save();
+        ctx.strokeStyle = action === 0 ? '#74b9ff' : '#fd79a8';
+        ctx.fillStyle   = action === 0 ? '#74b9ff' : '#fd79a8';
+        ctx.lineWidth   = 2.5;
+        ctx.lineCap     = 'round';
+        ctx.lineJoin    = 'round';
+
+        if (action === 0) {
+            // 向左箭头 ←
+            const ax = cartX - 6;
+            ctx.beginPath();
+            ctx.moveTo(ax, arrowY);
+            ctx.lineTo(ax - arrowSize, arrowY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax - arrowSize, arrowY);
+            ctx.lineTo(ax - arrowSize + 6, arrowY - 5);
+            ctx.lineTo(ax - arrowSize + 6, arrowY + 5);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            // 向右箭头 →
+            const ax = cartX + 6;
+            ctx.beginPath();
+            ctx.moveTo(ax, arrowY);
+            ctx.lineTo(ax + arrowSize, arrowY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax + arrowSize, arrowY);
+            ctx.lineTo(ax + arrowSize - 6, arrowY - 5);
+            ctx.lineTo(ax + arrowSize - 6, arrowY + 5);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // 杆子
+    const poleL = 80;   // 像素
+    const poleBaseX = cartX;
+    const poleBaseY = cartY;
+    const poleTipX  = poleBaseX + Math.sin(a_rad) * poleL;
+    const poleTipY  = poleBaseY - Math.cos(a_rad) * poleL;
+
+    ctx.beginPath();
+    ctx.moveTo(poleBaseX, poleBaseY);
+    ctx.lineTo(poleTipX,  poleTipY);
+    const angleAbs = Math.abs(a_rad * 180 / Math.PI);
+    const danger   = Math.min(1, angleAbs / env.thetaLimitDeg);
+    const cr = Math.round(255 * danger);
+    const cg = Math.round(255 * (1 - danger));
+    ctx.strokeStyle = `rgba(${cr},${cg},80,0.9)`;
+    ctx.lineWidth   = 5;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+
+    // 杆顶圆
+    ctx.beginPath();
+    ctx.arc(poleTipX, poleTipY, 5, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(${cr},${cg},80,1)`;
+    ctx.fill();
+
+    // 边界线
+    const leftBound  = W/2 - 2.4*scale;
+    const rightBound = W/2 + 2.4*scale;
+    ctx.strokeStyle='rgba(255,100,100,.4)';
+    ctx.lineWidth=1.5; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(leftBound,20);  ctx.lineTo(leftBound,H-10);  ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rightBound,20); ctx.lineTo(rightBound,H-10); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ===== 信息文字 =====
+    ctx.fillStyle = 'rgba(0,217,255,.8)';
+    ctx.font = '11px Consolas, monospace';
+
+    // 左上角：Episode 信息
+    let infoText = '';
+    if (replayEp !== null) {
+        infoText += `▶ Episode #${replayEp}`;
+    } else if (trainEp !== null) {
+        infoText += `Training Ep #${trainEp}`;
+    }
+    // 帧号（仅回放时显示）
+    if (frameIdx !== null && frameIdx !== undefined) {
+        infoText += infoText ? `  |  帧 #${frameIdx}` : `帧 #${frameIdx}`;
+    }
+    if (infoText) {
+        ctx.fillText(infoText, 8, 18);
+    }
+
+    if (isIdle) {
+        ctx.fillStyle='rgba(255,255,255,.3)';
+        ctx.font='bold 14px Segoe UI';
+        ctx.fillText('等待训练...', W/2-40, H/2);
+    }
+
+    // 状态数值（右下角）
+    ctx.fillStyle='rgba(200,200,200,.6)';
+    ctx.font='10px Consolas';
+    const deg  = (a_rad * 180 / Math.PI).toFixed(2);
+    const wDeg = (w_rad * 180 / Math.PI).toFixed(1);
+    ctx.fillText(`p=${p.toFixed(3)}m  v=${v.toFixed(3)}m/f  θ=${deg}°  ω=${wDeg}°/f`, 8, H-8);
+
+    // 帧号（右下角，大字体，仅回放时显示）
+    if (frameIdx !== null && frameIdx !== undefined) {
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        ctx.font = 'bold 28px Consolas, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`#${frameIdx}`, W - 12, H - 12);
+        ctx.textAlign = 'left';
+    }
+}
+
+// ================================================================
+//  图表
+// ================================================================
+function initReturnChart() {
+    const ctx = document.getElementById('returnChart').getContext('2d');
+    if (returnChartObj) { returnChartObj.destroy(); returnChartObj = null; }
+    returnChartObj = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Episode Return', data: [], borderColor:'#00d9ff', backgroundColor:'rgba(0,217,255,.08)', fill:true, tension:.3, pointRadius:0, borderWidth:1 },
+                { label: '移动平均(20)', data: [], borderColor:'#fdcb6e', backgroundColor:'transparent', fill:false, tension:.4, pointRadius:0, borderWidth:2 }
+            ]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false, animation:false,
+            plugins:{ legend:{ labels:{ color:'#888' } } },
+            scales:{
+                x:{ title:{display:true,text:'Episode',color:'#888'}, ticks:{color:'#888'}, grid:{color:'rgba(255,255,255,.08)'} },
+                y:{ title:{display:true,text:'Return (秒)',color:'#888'}, ticks:{color:'#888'}, grid:{color:'rgba(255,255,255,.08)'} }
+            }
+        }
+    });
+}
+
+function updateReturnChart() {
+    if (!returnChartObj) return;
+    const stride = Math.max(1, Math.floor(episodeReturns.length / 300));
+    const labels=[], data=[], mavg=[];
+    const W=20;
+    for (let i=0; i<episodeReturns.length; i+=stride) {
+        labels.push(i+1);
+        data.push(+episodeReturns[i].toFixed(3));
+        const s=Math.max(0,i-W+1);
+        const w=episodeReturns.slice(s,i+1);
+        mavg.push(+(w.reduce((a,b)=>a+b,0)/w.length).toFixed(3));
+    }
+    returnChartObj.data.labels                  = labels;
+    returnChartObj.data.datasets[0].data        = data;
+    returnChartObj.data.datasets[1].data        = mavg;
+    returnChartObj.update('none');
+}
+
+// ================================================================
+//  Episode 详情表
+// ================================================================
+function getReturnRating(ret) {
+    // 奖励：每坚持1帧+1分；fps=50时500帧≈500分
+    if (ret >= 400) return { text:'⭐优秀', cls:'excellent' };
+    if (ret >= 200) return { text:'✓良好',  cls:'good'      };
+    if (ret >= 100) return { text:'○一般',  cls:'normal'    };
+    if (ret >=  50) return { text:'△较差',  cls:'bad'       };
+    return                 { text:'✗极差',  cls:'terrible'  };
+}
+
+function updateEpisodeTable(data) {
+    const tbody = document.getElementById('episodeTableBody');
+    tbody.innerHTML = '';
+    const disp = data.slice(Math.max(0, data.length - 100));
+    for (const d of disp) {
+        const rat = getReturnRating(d.ret);
+        const tr  = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="color:#888">#${d.ep}</td>
+            <td class="ep-reward ${rat.cls}">${d.ret.toFixed(2)}</td>
+            <td class="ep-epsilon">${d.eps.toFixed(4)}</td>
+            <td style="font-size:11px">${rat.text}</td>`;
+        tbody.appendChild(tr);
+    }
+    document.getElementById('episodeTableContainer').scrollTop = 9999;
+}
+
+// ================================================================
+//  Q 值日志表刷新
+// ================================================================
+function updateQLogTable() {
+    const tbody = document.getElementById('qLogTableBody');
+    const disp  = qValueLogs.slice(-200);
+    let html = '';
+    for (const d of disp) {
+        const typeLabel = d.type === 'real'
+            ? '<span style="color:#00d9ff">真实</span>'
+            : '<span style="color:#a29bfe">回放</span>';
+        const actLabel  = d.action === 0
+            ? '<span style="color:#74b9ff">←左</span>'
+            : '<span style="color:#fd79a8">右→</span>';
+        html += `<tr>
+            <td style="color:#888">#${d.ep}</td>
+            <td style="color:#74b9ff">${d.step}</td>
+            <td>${typeLabel}</td>
+            <td>${actLabel}</td>
+            <td style="color:#dfe6e9">${(d.V||0).toFixed(4)}</td>
+            <td style="color:#55efc4">${d.qB0.toFixed(4)}</td>
+            <td style="color:#55efc4">${d.qB1.toFixed(4)}</td>
+            <td style="color:#dfe6e9">${(d.tV||0).toFixed(4)}</td>
+            <td style="color:#ffeaa7">${d.qT0.toFixed(4)}</td>
+            <td style="color:#ffeaa7">${d.qT1.toFixed(4)}</td>
+        </tr>`;
+    }
+    tbody.innerHTML = html;
+    const container = tbody.closest('div');
+    if (container) container.scrollTop = container.scrollHeight;
+}
+
+// ================================================================
+//  导出 Q 值日志为 CSV
+// ================================================================
+function exportQLogCSV() {
+    if (qValueLogs.length === 0) { alert('暂无日志，请先训练！'); return; }
+    const header = 'Episode,Step,Type,Action,BehaviorV,BehaviorQ_Left,BehaviorQ_Right,TargetV,TargetQ_Left,TargetQ_Right';
+    const rows = qValueLogs.map(d =>
+        `${d.ep},${d.step},${d.type},${d.action === 0 ? 'Left' : 'Right'},${(d.V||0).toFixed(6)},${d.qB0.toFixed(6)},${d.qB1.toFixed(6)},${(d.tV||0).toFixed(6)},${d.qT0.toFixed(6)},${d.qT1.toFixed(6)}`
+    );
+    const csv  = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `cartpole_dueling_qlog_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ================================================================
+//  Q 值查询
+// ================================================================
+function queryQValue() {
+    if (!targetNet) { alert('请先训练网络！'); return; }
+    const net = targetNet;
+
+    const p = parseFloat(document.getElementById('qp').value) || 0;
+    const v = parseFloat(document.getElementById('qv').value) || 0;
+    const a = parseFloat(document.getElementById('qa').value) || 0;
+    const w = parseFloat(document.getElementById('qw').value) || 0;
+
+    const rawState = [p, v, a * Math.PI / 180, w * Math.PI / 180];
+    const ns = CartPoleEnv.normalize(rawState);
+    const q  = net.predict(ns);  // [V, Q_left, Q_right]
+    const V = q[0], QL = q[1], QR = q[2];
+    const A_left = QL - V, A_right = QR - V;
+    const bestA = QL >= QR ? 0 : 1;
+
+    const div = document.getElementById('qqResult');
+    div.style.display = 'block';
+    div.innerHTML = `
+        <div style="color:#888;font-size:11px;margin-bottom:8px">
+            输入状态: p=${p}m, v=${v}m/帧, θ=${a}°, ω=${w}°/帧
+        </div>
+        <div style="color:#666;font-size:10px;margin-bottom:10px">
+            归一化: [${ns.map(x=>x.toFixed(4)).join(', ')}]
+        </div>
+        <div class="qquery-row">
+            <span class="qquery-label">📊 状态价值 V</span>
+            <span class="qquery-val" style="color:#dfe6e9">V=${V.toFixed(6)}</span>
+        </div>
+        <div class="qquery-row">
+            <span class="qquery-label">⚡ 优势 A(←左)</span>
+            <span class="qquery-val">A=${A_left.toFixed(6)}</span>
+        </div>
+        <div class="qquery-row">
+            <span class="qquery-label">⚡ 优势 A(右→)</span>
+            <span class="qquery-val">A=${A_right.toFixed(6)}</span>
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,.1);margin:8px 0;"></div>
+        <div class="qquery-row">
+            <span class="qquery-label">← 向左 (action=0)</span>
+            <span class="qquery-val${bestA===0?' best':''}">Q=${QL.toFixed(6)}${bestA===0?' ⭐':''}</span>
+        </div>
+        <div class="qquery-row">
+            <span class="qquery-label">→ 向右 (action=1)</span>
+            <span class="qquery-val${bestA===1?' best':''}">Q=${QR.toFixed(6)}${bestA===1?' ⭐':''}</span>
+        </div>
+        <div style="margin-top:8px;color:#fdcb6e;font-size:12px">最优动作: ${bestA===0?'← 向左':'→ 向右'}</div>`;
+}
+
+// ================================================================
+//  日志
+// ================================================================
+function addLog(msg, type='') {
+    const c = document.getElementById('trainingLog');
+    const el = document.createElement('div');
+    el.className = `log-entry ${type}`;
+    el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    c.appendChild(el);
+    c.scrollTop = 9999;
+}
+
+// ================================================================
+//  TF.js 格式 导出 / 导入
+// ================================================================
+function exportTFJS() {
+    const net = behaviorNet;
+    if (!net) { alert('请先训练网络！'); return; }
+    const baseName = prompt('请输入文件名前缀（不含扩展名）', 'cartpole_dueling_qnet');
+    if (!baseName) return;
+    net.saveTFJS(baseName);
+    document.getElementById('tfjsStatus').textContent =
+        `✓ 已导出 ${baseName}.json + ${baseName}.weights.bin`;
+    document.getElementById('tfjsStatus').style.color = '#55efc4';
+    addLog(`导出 TF.js 格式模型：${baseName}`);
+}
+
+let _tfjsJsonData = null;  // 暂存已解析的 json，等待 .bin 也选中
+
+function onTFJSJsonSelected(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            _tfjsJsonData = JSON.parse(e.target.result);
+            document.getElementById('tfjsStatus').textContent =
+                `✓ 已读取 ${file.name}，请继续选择对应的 .weights.bin 文件`;
+            document.getElementById('tfjsStatus').style.color = '#fdcb6e';
+            // 自动触发 .bin 文件选择
+            setTimeout(() => document.getElementById('tfjsBinInput').click(), 100);
+        } catch(err) {
+            alert('JSON 文件解析失败：' + err.message);
+            _tfjsJsonData = null;
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = '';  // 允许重复选择同一文件
+}
+
+function onTFJSBinSelected(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (!_tfjsJsonData) { alert('请先选择 .json 文件！'); return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const net = QNet.loadTFJS(_tfjsJsonData, e.target.result);
+            // 用当前 UI 的学习率覆盖导入模型的 lr
+            net.lr = parseFloat(document.getElementById('alpha').value) || 0.001;
+            net._initAdam();   // 重新初始化 Adam 状态（导入后继续训练需要）
+            behaviorNet = net;
+            targetNet.copyFrom(behaviorNet);
+
+            document.getElementById('tfjsStatus').textContent =
+                `✓ 已导入模型权重（${file.name}）`;
+            document.getElementById('tfjsStatus').style.color = '#55efc4';
+            addLog('已从 TF.js 格式导入 Dueling DQN 模型权重', 'highlight');
+            _tfjsJsonData = null;
+        } catch(err) {
+            alert('权重加载失败：' + err.message);
+            _tfjsJsonData = null;
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = '';
+}
+
+// ================================================================
+//  初始化
+// ================================================================
+function init() {
+    initReturnChart();
+    renderCartpole([0,0,0,0], null, null, true);
+    addLog('CartPole Dueling DQN 就绪，请配置参数后点击"开始训练"', 'highlight');
+}
+
+init();
+</script>
+</body>
+</html>
